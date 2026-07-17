@@ -17,3 +17,6 @@ ziTmD6Oa
 # Customer data - never commit PII
 Pestkee Active Customers LAL.csv
 *.csv
+
+# allow the placeholder template
+!.env.example
