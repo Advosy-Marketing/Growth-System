@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Advosy Time Clock — Widget</title>
+<style>
+  :root{
+    --bg:#0e121b; --panel:#161b27; --panel2:#1e2533; --line:#293142;
+    --txt:#e8ecf4; --mut:#8b95a9; --accent:#6366f1; --accent2:#818cf8;
+    --green:#22c55e; --greenbg:#0e2a1a; --red:#ef4444; --amber:#f59e0b;
+  }
+  /* light theme via ?theme=light */
+  body.light{--bg:#f4f6fb;--panel:#ffffff;--panel2:#eef1f7;--line:#e2e7f0;--txt:#1a2230;--mut:#6b7488;--greenbg:#e7f7ee;}
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{font-family:Inter,system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--txt);-webkit-font-smoothing:antialiased;font-size:14px}
+  .w{display:flex;flex-direction:column;height:100%;min-height:100%;padding:14px;gap:12px;max-width:440px;margin:0 auto}
+  .hd{display:flex;align-items:center;justify-content:space-between}
+  .hd .t{display:flex;align-items:center;gap:8px;font-weight:700;letter-spacing:-.01em}
+  .logo{width:24px;height:24px;border-radius:7px;background:linear-gradient(135deg,var(--accent),var(--accent2));display:grid;place-items:center;color:#fff;font-weight:800;font-size:13px}
+  .live{font-size:11px;font-weight:600;color:var(--green);display:flex;align-items:center;gap:5px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px}
+  .btn{border:0;border-radius:11px;padding:11px 16px;font-weight:600;font-size:14px;cursor:pointer;font-family:inherit;background:var(--panel2);color:var(--txt);transition:.15s}
+  .btn:hover{filter:brightness(1.12)} .btn:disabled{opacity:.5;cursor:not-allowed}
+  .btn.green{background:var(--green);color:#06210f} .btn.red{background:var(--red);color:#fff}
+  .btn.primary{background:var(--accent);color:#fff} .btn.ghost{background:transparent;border:1px solid var(--line);color:var(--mut);padding:7px 10px;font-size:12px}
+  .full{width:100%}
+  .avatar{width:30px;height:30px;border-radius:50%;display:grid;place-items:center;font-weight:700;font-size:12px;color:#fff;flex:none}
+  .clk{display:flex;flex-direction:column;align-items:center;gap:11px;text-align:center;padding:18px 14px}
+  .pill{display:inline-flex;align-items:center;gap:6px;font-weight:600;font-size:12px;padding:5px 11px;border-radius:999px;background:var(--panel2);color:var(--mut)}
+  .pill.on{background:var(--greenbg);color:#5ee08f}
+  .dot{width:8px;height:8px;border-radius:50%;background:currentColor}
+  .pill.on .dot{animation:pulse 1.6s infinite}
+  @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(34,197,94,.5)}70%{box-shadow:0 0 0 7px rgba(34,197,94,0)}100%{box-shadow:0 0 0 0 rgba(34,197,94,0)}}
+  .timer{font-size:38px;font-weight:800;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+  .stats{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+  .st{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:10px;text-align:center}
+  .st .v{font-size:18px;font-weight:800;letter-spacing:-.01em}
+  .st .l{font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--mut);font-weight:600;margin-top:2px}
+  .sect{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--mut);font-weight:700;margin:2px 2px 0}
+  .now{display:flex;flex-direction:column;gap:7px;max-height:168px;overflow:auto}
+  .nrow{display:flex;align-items:center;gap:9px;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:7px 9px}
+  .nrow .nm{font-weight:600;font-size:13px;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .nrow .tm{font-variant-numeric:tabular-nums;font-weight:700;font-size:13px;color:#5ee08f}
+  .who{display:flex;align-items:center;gap:9px}
+  .who .nm{font-weight:600}
+  input,select{font-family:inherit;font-size:14px;background:var(--panel2);border:1px solid var(--line);border-radius:10px;color:var(--txt);padding:10px;width:100%}
+  input:focus,select:focus{outline:0;border-color:var(--accent)}
+  .err{color:#fca5a5;font-size:12px;min-height:15px}
+  .muted{color:var(--mut)}
+  .foot{margin-top:auto;display:flex;justify-content:space-between;align-items:center;font-size:12px}
+  .lnk{color:var(--accent2);text-decoration:none;font-weight:600}
+  .hide{display:none!important}
+  .toast{position:fixed;bottom:12px;left:50%;transform:translateX(-50%);background:var(--panel2);border:1px solid var(--line);padding:9px 16px;border-radius:10px;font-size:13px;font-weight:600;opacity:0;transition:.25s;pointer-events:none;z-index:9}
+  .toast.show{opacity:1} .toast.good{border-color:#1f5135;color:#5ee08f} .toast.bad{border-color:#5b2330;color:#fca5a5}
+  ::-webkit-scrollbar{width:7px}::-webkit-scrollbar-thumb{background:var(--line);border-radius:4px}
+</style>
+</head>
+<body>
+<div class="w">
+  <div class="hd">
+    <div class="t"><div class="logo">A</div> Time Clock</div>
+    <div class="live" id="live">● live</div>
+  </div>
+
+  <!-- SIGN IN -->
+  <div id="signin" class="card">
+    <div class="sect" style="margin:0 0 9px">Who's clocking in?</div>
+    <select id="si_user" style="margin-bottom:9px"><option value="">Loading…</option></select>
+    <input id="si_pin" inputmode="numeric" maxlength="6" placeholder="PIN" style="margin-bottom:9px"/>
+    <button class="btn primary full" id="si_go">Start</button>
+    <div class="err" id="si_err" style="margin-top:6px"></div>
+  </div>
+
+  <!-- APP -->
+  <div id="app" class="hide" style="display:flex;flex-direction:column;gap:12px;flex:1">
+    <div class="card clk">
+      <div class="who" style="margin-bottom:2px"><div class="avatar" id="me_av"></div><span class="nm" id="me_nm"></span></div>
+      <div class="pill" id="st"><span class="dot"></span><span id="st_t">Off the clock</span></div>
+      <div class="timer" id="timer">0:00:00</div>
+      <button class="btn green full" id="toggle" style="max-width:240px">Clock In</button>
+      <div class="muted" id="since" style="font-size:12px"></div>
+    </div>
+
+    <div class="stats">
+      <div class="st"><div class="v" id="s_today">0.0h</div><div class="l">Today</div></div>
+      <div class="st"><div class="v" id="s_week">0.0h</div><div class="l">Week</div></div>
+      <div class="st"><div class="v" id="s_comm">$0</div><div class="l">Comm wk</div></div>
+    </div>
+
+    <div class="sect">Working now <span id="now_n" class="muted">(0)</span></div>
+    <div class="now" id="now"></div>
+
+    <div class="foot">
+      <a class="lnk" id="full" href="./index.html" target="_blank" rel="noopener">Open full board ↗</a>
+      <button class="btn ghost" id="signout">Sign out</button>
+    </div>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+const SUPABASE_URL="https://andzztvmaleiefxcfjwh.supabase.co";
+const ANON="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFuZHp6dHZtYWxlaWVmeGNmandoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3OTA3OTMsImV4cCI6MjA5NzM2Njc5M30.3C9YUDfVmZmLRV__Jd5DBfzr14-zJXsVHJIp8z2u43Y";
+const FN=SUPABASE_URL+"/functions/v1/";
+const sb=supabase.createClient(SUPABASE_URL,ANON,{realtime:{params:{eventsPerSecond:5}}});
+const $=s=>document.querySelector(s);
+const LS="advosy_timeclock_me";
+const params=new URLSearchParams(location.search);
+if(params.get("theme")==="light")document.body.classList.add("light");
+let me=null, roster=[], entries=[], comms=[];
+
+// storage that won't throw in a blocked 3rd-party iframe
+const store={get(){try{return localStorage.getItem(LS)}catch(e){return null}},set(v){try{localStorage.setItem(LS,v)}catch(e){}},del(){try{localStorage.removeItem(LS)}catch(e){}}};
+
+const initials=n=>n.split(/\s+/).map(w=>w[0]).slice(0,2).join("").toUpperCase();
+const colorFor=u=>u&&u.color||("hsl("+(Math.abs([...(u?.id||"x")].reduce((a,c)=>a+c.charCodeAt(0),0))*47%360)+" 55% 50%)");
+const money=n=>"$"+(Math.round(n*100)/100).toLocaleString(undefined,{maximumFractionDigits:2});
+const hrs=ms=>(ms/3600000).toFixed(1)+"h";
+function weekStart(){const d=new Date();const day=(d.getDay()+6)%7;d.setHours(0,0,0,0);d.setDate(d.getDate()-day);return d.getTime();}
+function dayStart(){const d=new Date();d.setHours(0,0,0,0);return d.getTime();}
+function fmt(ms){const s=Math.max(0,Math.floor(ms/1000));const h=Math.floor(s/3600),m=Math.floor(s%3600/60),x=s%60;return h+":"+String(m).padStart(2,"0")+":"+String(x).padStart(2,"0");}
+function eMs(e,since){const a=new Date(e.clock_in).getTime();const b=e.clock_out?new Date(e.clock_out).getTime():Date.now();if(since&&b<since)return 0;return b-Math.max(a,since||0);}
+const userById=id=>roster.find(u=>u.id===id)||{id,full_name:"(removed)"};
+function toast(m,k){const t=$("#toast");t.textContent=m;t.className="toast show "+(k||"");setTimeout(()=>t.className="toast",2000);}
+async function call(fn,body){const r=await fetch(FN+fn,{method:"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer "+ANON,"apikey":ANON},body:JSON.stringify(body)});const j=await r.json();if(!r.ok)throw new Error(j.error||"error");return j;}
+
+async function loadRoster(){const {data}=await sb.from("v_roster").select("*").eq("is_active",true).order("full_name");roster=data||[];}
+async function loadData(){
+  const ws=new Date(weekStart()).toISOString();
+  const [e,c]=await Promise.all([
+    sb.from("time_entries").select("*").gte("clock_in",new Date(Date.now()-1209600000).toISOString()).order("clock_in",{ascending:false}),
+    sb.from("commissions").select("*").gte("created_at",ws)
+  ]);
+  entries=e.data||[];comms=c.data||[];
+}
+
+// ----- sign in -----
+async function initSignin(hintId){
+  await loadRoster();
+  const sel=$("#si_user");
+  sel.innerHTML='<option value="">Select your name…</option>'+roster.map(u=>`<option value="${u.id}"${u.id===hintId?" selected":""}>${u.full_name}</option>`).join("");
+  $("#si_go").onclick=submit;
+  $("#si_pin").addEventListener("keydown",e=>{if(e.key==="Enter")submit();});
+  async function submit(){
+    const uid=sel.value,pin=$("#si_pin").value.trim(),err=$("#si_err");
+    if(!uid){err.textContent="Pick your name.";return;}
+    if(pin.length<4){err.textContent="Enter your PIN.";return;}
+    err.textContent="Checking…";
+    try{await call("clock",{user_id:uid,pin,action:"status"});
+      const u=roster.find(x=>x.id===uid);
+      me={id:uid,full_name:u.full_name,pin,role:u.role};store.set(JSON.stringify(me));
+      err.textContent="";startApp();
+    }catch(ex){err.textContent="Wrong PIN.";}
+  }
+}
+
+// ----- app -----
+function startApp(){
+  $("#signin").classList.add("hide");$("#app").classList.remove("hide");
+  const u=userById(me.id);
+  $("#me_av").style.background=colorFor(u);$("#me_av").textContent=initials(me.full_name);
+  $("#me_nm").textContent=me.full_name;
+  $("#toggle").onclick=toggle;
+  $("#signout").onclick=()=>{store.del();location.reload();};
+  if(params.get("full"))$("#full").href=params.get("full");
+  render();subscribe();setInterval(tick,1000);
+}
+const myOpen=()=>entries.find(e=>e.user_id===me.id&&!e.clock_out);
+function tick(){
+  const o=myOpen();
+  if(o)$("#timer").textContent=fmt(Date.now()-new Date(o.clock_in).getTime());
+  document.querySelectorAll("[data-since]").forEach(el=>el.textContent=fmt(Date.now()-Number(el.dataset.since)));
+}
+let busy=false;
+async function toggle(){
+  if(busy)return;busy=true;const b=$("#toggle");b.disabled=true;
+  try{const r=await call("clock",{user_id:me.id,pin:me.pin,action:"toggle"});
+    toast(r.clocked_in?"Clocked in ✓":"Clocked out ✓","good");await loadData();render();
+  }catch(ex){toast(ex.message,"bad");}
+  busy=false;b.disabled=false;
+}
+function render(){
+  const o=myOpen(),ws=weekStart(),ds=dayStart();
+  $("#st").className="pill"+(o?" on":"");
+  $("#st_t").textContent=o?"On the clock":"Off the clock";
+  $("#toggle").textContent=o?"Clock Out":"Clock In";
+  $("#toggle").className="btn full "+(o?"red":"green");
+  $("#timer").textContent=o?fmt(Date.now()-new Date(o.clock_in).getTime()):"0:00:00";
+  $("#since").textContent=o?("Since "+new Date(o.clock_in).toLocaleTimeString([],{hour:"numeric",minute:"2-digit"})):"";
+  const mine=entries.filter(e=>e.user_id===me.id);
+  let today=0,week=0;mine.forEach(e=>{today+=eMs(e,ds);week+=eMs(e,ws);});
+  $("#s_today").textContent=hrs(today);$("#s_week").textContent=hrs(week);
+  const cs=comms.filter(c=>c.user_id===me.id).reduce((a,c)=>a+Number(c.amount),0);
+  $("#s_comm").textContent=money(cs);
+  // working now
+  const open={};entries.forEach(e=>{if(!e.clock_out)open[e.user_id]=e;});
+  const on=roster.filter(u=>open[u.id]);
+  $("#now_n").textContent="("+on.length+")";
+  $("#now").innerHTML=on.length?on.map(u=>{const e=open[u.id];return `<div class="nrow"><div class="avatar" style="width:26px;height:26px;font-size:11px;background:${colorFor(u)}">${initials(u.full_name)}</div><span class="nm">${u.full_name}${u.id===me.id?' <span class="muted">(you)</span>':''}</span><span class="tm" data-since="${new Date(e.clock_in).getTime()}">${fmt(Date.now()-new Date(e.clock_in).getTime())}</span></div>`;}).join(""):`<div class="muted" style="font-size:13px;padding:2px">Nobody's clocked in right now.</div>`;
+  try{parent.postMessage({type:"advosy-clock-state",on:!!o},"*");}catch(e){}
+}
+let rt=null;function refresh(){clearTimeout(rt);rt=setTimeout(async()=>{await loadData();render();},300);}
+function subscribe(){
+  sb.channel("w-rt")
+    .on("postgres_changes",{event:"*",schema:"public",table:"time_entries"},refresh)
+    .on("postgres_changes",{event:"*",schema:"public",table:"commissions"},refresh)
+    .on("postgres_changes",{event:"*",schema:"public",table:"app_users"},async()=>{await loadRoster();render();})
+    .subscribe(s=>{const l=$("#live");l.textContent=s==="SUBSCRIBED"?"● live":"○ …";l.style.color=s==="SUBSCRIBED"?"var(--green)":"var(--amber)";});
+}
+
+// ----- allow parent app to pass the logged-in rep -----
+window.addEventListener("message",e=>{
+  const d=e.data||{};
+  if(d.type==="advosy-rep"&&d.user_id&&!me){
+    // preselect in sign-in; rep still confirms with PIN once
+    const sel=$("#si_user");if(sel)sel.value=d.user_id;
+    if(d.name){/* optional */}
+  }
+});
+
+// ----- boot -----
+(async function(){
+  await loadData(); // warm
+  const hintId=params.get("user_id");
+  const saved=store.get();
+  if(saved){try{me=JSON.parse(saved);await loadRoster();
+    await call("clock",{user_id:me.id,pin:me.pin,action:"status"});
+    const u=roster.find(x=>x.id===me.id);
+    if(u){me.full_name=u.full_name;me.role=u.role;startApp();return;}
+  }catch(ex){store.del();}}
+  // tell parent we're ready (it may postMessage the rep)
+  try{parent.postMessage({type:"advosy-widget-ready"},"*");}catch(e){}
+  initSignin(hintId);
+})();
+</script>
+</body>
+</html>

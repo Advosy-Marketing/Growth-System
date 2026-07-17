@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Booking System (preview) — with Time Clock widget</title>
+<style>
+  body{margin:0;font-family:Inter,system-ui,sans-serif;background:#0b0d12;color:#e8ecf4}
+  .bar{padding:16px 22px;border-bottom:1px solid #262d3d;font-weight:800;display:flex;align-items:center;gap:10px}
+  .logo{width:28px;height:28px;border-radius:8px;background:linear-gradient(135deg,#6366f1,#818cf8);display:grid;place-items:center;color:#fff}
+  .layout{display:flex;gap:22px;max-width:1200px;margin:24px auto;padding:0 22px}
+  .main{flex:1;background:#141822;border:1px solid #262d3d;border-radius:16px;padding:26px;min-height:520px}
+  .side{width:360px}
+  .mut{color:#8b95a9}
+  h2{margin:0 0 6px}
+  iframe{width:100%;height:600px;border:0;border-radius:16px;background:#0e121b}
+  @media(max-width:900px){.layout{flex-direction:column}.side{width:100%}}
+</style>
+</head>
+<body>
+  <div class="bar"><div class="logo">A</div> Advosy Growth — Booking (preview)</div>
+  <div class="layout">
+    <div class="main">
+      <h2>Booking workspace</h2>
+      <p class="mut">This is a stand-in for your real booking app. The panel on the right is the
+      embeddable Time Clock widget — same one your team would use inside the booking system.
+      Sign in with your name + PIN to try clocking in. There's also a floating launcher button
+      (bottom-right) powered by <code>embed.js</code>.</p>
+    </div>
+    <div class="side">
+      <!-- Option 1: inline sidebar widget -->
+      <iframe src="./widget.html" title="Advosy Time Clock" allow="clipboard-write"></iframe>
+    </div>
+  </div>
+  <!-- Option 2: floating launcher (same widget, button bottom-right) -->
+  <script src="./embed.js" data-label="Clock In"></script>
+</body>
+</html>

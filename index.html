@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Advosy Growth — Dashboard</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+tailwind.config = { theme: { extend: {
+  colors: { brand:{DEFAULT:'#8b5cf6',light:'#a78bfa'}, ink:'#18181b', body:'#3f3f46', muted:'#71717a', line:'#e4e4e7', surface:'#f4f4f5', danger:'#ef4444' },
+  fontFamily: { sans:['ui-sans-serif','system-ui','-apple-system','Segoe UI','sans-serif'] },
+}}};
+</script>
+<style>
+  html,body{height:100%;margin:0;overflow:hidden}
+  #frames iframe{position:absolute;inset:0;width:100%;height:100%;border:0;background:#fff}
+  .tabbtn{position:relative}
+  .tabbtn.active{color:#fff}
+  .tabbtn.active::after{content:'';position:absolute;left:12px;right:12px;bottom:0;height:2px;background:#a78bfa;border-radius:2px}
+</style>
+</head>
+<body class="font-sans text-body bg-surface antialiased">
+
+<div id="shell" class="flex flex-col" style="height:100vh">
+
+  <!-- ===== Top bar (global tabs) — pinned, never scrolls ===== -->
+  <header class="flex-none h-14 bg-ink border-b border-zinc-800">
+    <div class="h-full px-4 md:px-6 flex items-center gap-1 md:gap-2">
+      <span class="text-white font-bold text-lg tracking-tight mr-2 md:mr-4 shrink-0">Advosy</span>
+      <nav id="tabs" class="flex items-center gap-0.5 md:gap-1 overflow-x-auto h-full"></nav>
+      <div class="ml-auto flex items-center gap-3 shrink-0">
+        <span id="who" class="hidden sm:inline text-zinc-300 text-xs font-medium"></span>
+        <button id="signout" class="hidden text-xs text-zinc-300 hover:text-white">Sign out</button>
+      </div>
+    </div>
+  </header>
+
+  <!-- ===== Login gate ===== -->
+  <div id="login" class="hidden flex-1 overflow-auto">
+    <div class="max-w-md mx-auto mt-24 bg-white rounded-xl border border-line p-7">
+      <p class="uppercase text-xs font-semibold text-brand mb-2 tracking-wide">Advosy Growth</p>
+      <h1 class="text-2xl font-bold text-ink mb-1">Sign in</h1>
+      <p class="text-sm text-body mb-5">Use your name and PIN to access the dashboard.</p>
+      <label class="block text-xs font-semibold text-muted mb-1">Your name</label>
+      <select id="li_user" class="w-full rounded-md border border-line px-3 py-2 text-sm mb-3 bg-white"><option value="">Loading…</option></select>
+      <label class="block text-xs font-semibold text-muted mb-1">PIN</label>
+      <input id="li_pin" type="password" inputmode="numeric" maxlength="6" class="w-full rounded-md border border-line px-3 py-2 text-sm" placeholder="••••" />
+      <button id="li_go" class="w-full mt-4 rounded-md bg-brand hover:bg-brand-light text-white font-medium px-5 py-2.5 text-sm">Sign in</button>
+      <div id="li_err" class="text-xs text-danger mt-2 h-4"></div>
+    </div>
+  </div>
+
+  <!-- ===== Frames (each pane scrolls internally) ===== -->
+  <div id="frames" class="hidden flex-1 relative">
+    <iframe id="f-booking" title="Booking" allow="clipboard-write"></iframe>
+    <iframe id="f-dash" title="Dashboard" class="hidden"></iframe>
+  </div>
+
+</div>
+
+<script>
+const SUPA_URL="https://andzztvmaleiefxcfjwh.supabase.co";
+const ANON="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFuZHp6dHZtYWxlaWVmeGNmandoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3OTA3OTMsImV4cCI6MjA5NzM2Njc5M30.3C9YUDfVmZmLRV__Jd5DBfzr14-zJXsVHJIp8z2u43Y";
+const $=s=>document.querySelector(s);
+let rep=null;
+
+/* ---------- tabs ---------- */
+function tabDefs(){
+  const isAdmin = rep && (rep.role==='admin'||rep.role==='manager');
+  const V='20260629'; // bump on each deploy to force iframes to fetch the new build
+  return [
+    {id:'book',      label:'Book Now',          frame:'booking', src:`book.html?embed=1&v=${V}#book`,            view:'book'},
+    {id:'history',   label:'Booking History',   frame:'booking', src:`book.html?embed=1&v=${V}#book`,            view:'history'},
+    {id:'pay',       label:isAdmin?'Payroll & Commissions':'My Pay', frame:'dash', src:`admin-report.html?embed=1&v=${V}#payroll`, view:'payroll'},
+    {id:'marketing', label:'Marketing',         frame:'dash',    src:`admin-report.html?embed=1&v=${V}#payroll`, view:'marketing'},
+  ];
+}
+const FRAME_EL={ booking:()=>$('#f-booking'), dash:()=>$('#f-dash') };
+const ready={booking:false, dash:false};
+const pending={booking:null, dash:null};
+
+// Robust cross-frame view switching via postMessage (works regardless of origin / file://).
+function frameKeyOf(win){ try{ if(win===FRAME_EL.booking().contentWindow) return 'booking'; if(win===FRAME_EL.dash().contentWindow) return 'dash'; }catch(e){} return null; }
+window.addEventListener('message', e=>{
+  const d=e.data; if(!d) return;
+  if(d.type==='advosy-ready'){
+    const k=frameKeyOf(e.source); if(!k) return; ready[k]=true;
+    if(pending[k]!=null){ try{ e.source.postMessage({type:'advosy-view', view:pending[k]},'*'); }catch(_){} pending[k]=null; }
+  }
+});
+function postView(frameKey, view){
+  const f=FRAME_EL[frameKey]();
+  if(ready[frameKey] && f.contentWindow){ try{ f.contentWindow.postMessage({type:'advosy-view', view},'*'); }catch(e){ pending[frameKey]=view; } }
+  else { pending[frameKey]=view; }
+}
+function ensureFrameLoaded(def){
+  const f=FRAME_EL[def.frame]();
+  if(!f._initialized){ f._initialized=true; f.src=def.src; }
+  return f;
+}
+function switchTab(id){
+  const defs=tabDefs(); const def=defs.find(d=>d.id===id)||defs[0];
+  document.querySelectorAll('.tabbtn').forEach(b=>b.classList.toggle('active', b.dataset.tab===id));
+  const showFrame=FRAME_EL[def.frame]();
+  Object.values(FRAME_EL).forEach(get=>{ const f=get(); f.classList.toggle('hidden', f!==showFrame); });
+  ensureFrameLoaded(def);
+  postView(def.frame, def.view);
+  try{ history.replaceState(null,'','#'+id); }catch(e){}
+}
+function buildTabs(){
+  const nav=$('#tabs'); nav.innerHTML='';
+  tabDefs().forEach(d=>{
+    const b=document.createElement('button');
+    b.className='tabbtn whitespace-nowrap px-3 md:px-4 h-full text-sm font-semibold text-zinc-300 hover:text-white';
+    b.dataset.tab=d.id; b.textContent=d.label; b.onclick=()=>switchTab(d.id);
+    nav.appendChild(b);
+  });
+}
+
+/* ---------- auth ---------- */
+async function restGet(path){
+  const r=await fetch(SUPA_URL+'/rest/v1/'+path,{headers:{apikey:ANON,Authorization:'Bearer '+ANON}});
+  return r.ok?await r.json():[];
+}
+async function clockStatus(id,pin){
+  const r=await fetch(SUPA_URL+'/functions/v1/clock',{method:'POST',
+    headers:{'Content-Type':'application/json','Authorization':'Bearer '+ANON,'apikey':ANON},
+    body:JSON.stringify({user_id:id,pin:pin,action:'status'})});
+  const j=await r.json(); if(!r.ok) throw new Error(j.error||'error'); return j;
+}
+async function boot(){
+  try{ rep=JSON.parse(localStorage.getItem('advosy_rep')); }catch(e){ rep=null; }
+  if(rep && rep.pin){ return start(); }
+  $('#login').classList.remove('hidden');
+  const roster=await restGet('v_roster?select=id,full_name,role,team&is_active=eq.true&order=full_name');
+  const sel=$('#li_user');
+  sel.innerHTML='<option value="">Select your name…</option>'+roster.map(u=>`<option value="${u.id}">${u.full_name}</option>`).join('');
+  const go=async()=>{
+    const id=$('#li_user').value, pin=$('#li_pin').value.trim();
+    if(!id){ $('#li_err').textContent='Pick your name.'; return; }
+    if(pin.length<4){ $('#li_err').textContent='Enter your PIN.'; return; }
+    $('#li_err').textContent='Checking…';
+    try{
+      await clockStatus(id,pin);
+      const u=roster.find(x=>x.id===id)||{};
+      rep={ id, full_name:u.full_name, pin, role:u.role, team:u.team };
+      try{ localStorage.setItem('advosy_rep', JSON.stringify(rep)); }catch(e){}
+      $('#login').classList.add('hidden');
+      start();
+    }catch(e){ $('#li_err').textContent='Wrong PIN. Try again.'; }
+  };
+  $('#li_go').onclick=go;
+  $('#li_pin').addEventListener('keydown',e=>{ if(e.key==='Enter') go(); });
+}
+function start(){
+  $('#login').classList.add('hidden');
+  $('#frames').classList.remove('hidden');
+  $('#who').textContent='Signed in as '+(rep.full_name||'');
+  $('#who').classList.remove('hidden');
+  $('#signout').classList.remove('hidden');
+  $('#signout').onclick=()=>{ try{localStorage.removeItem('advosy_rep');}catch(e){}; location.reload(); };
+  buildTabs();
+  const want=(location.hash||'').replace('#','');
+  const ids=tabDefs().map(d=>d.id);
+  switchTab(ids.includes(want)?want:'book');
+}
+boot();
+</script>
+</body>
+</html>

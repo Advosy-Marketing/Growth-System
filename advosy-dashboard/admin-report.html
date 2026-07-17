@@ -1,0 +1,637 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Advosy Growth — Payroll & Commissions</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.0/dist/chart.umd.js"></script>
+<script>
+tailwind.config = { theme: { extend: {
+  colors: { brand:{DEFAULT:'#8b5cf6',light:'#a78bfa'}, ink:'#18181b', body:'#3f3f46', muted:'#71717a', line:'#e4e4e7', surface:'#f4f4f5', danger:'#ef4444' },
+  fontFamily: { sans:['ui-sans-serif','system-ui','-apple-system','Segoe UI','sans-serif'] }, maxWidth:{ container:'1280px' },
+}}};
+</script>
+<style> h1{letter-spacing:-.6px} .tabular{font-variant-numeric:tabular-nums} </style>
+</head>
+<body class="font-sans text-body bg-surface antialiased">
+
+<header id="appHeader" class="sticky top-0 z-40 h-16 bg-ink/95 backdrop-blur-md border-b border-zinc-800">
+  <div class="max-w-container mx-auto h-full px-6 flex items-center justify-between">
+    <div class="flex items-center gap-3">
+      <span class="text-white font-bold text-lg tracking-tight">Advosy</span>
+      <span class="hidden md:inline text-zinc-400 text-xs">Payroll &amp; Commissions</span>
+    </div>
+    <div class="flex items-center gap-3">
+      <span id="who" class="text-zinc-300 text-sm font-medium"></span>
+      <a href="booking-app-prototype.html" class="text-xs text-zinc-300 hover:text-white underline">Booking</a>
+      <button id="signout" class="hidden text-xs text-zinc-300 hover:text-white">Sign out</button>
+    </div>
+  </div>
+</header>
+
+<!-- LOGIN -->
+<div id="login" class="max-w-md mx-auto mt-16 bg-white rounded-xl border border-line p-7">
+  <p class="uppercase text-xs font-semibold text-brand mb-2 tracking-wide">Admin</p>
+  <h1 class="text-2xl font-bold text-ink mb-1">Payroll &amp; Commissions</h1>
+  <p class="text-sm text-body mb-5">Admin sign-in required.</p>
+  <label class="block text-xs font-semibold text-muted mb-1">Your name</label>
+  <select id="li_user" class="w-full rounded-md border border-line px-3 py-2 text-sm mb-3 bg-white"><option value="">Loading…</option></select>
+  <label class="block text-xs font-semibold text-muted mb-1">PIN</label>
+  <input id="li_pin" type="password" inputmode="numeric" maxlength="6" class="w-full rounded-md border border-line px-3 py-2 text-sm" placeholder="••••" />
+  <button id="li_go" class="w-full mt-4 rounded-md bg-brand hover:bg-brand-light text-white font-medium px-5 py-2.5 text-sm">Sign in</button>
+  <div id="li_err" class="text-xs text-danger mt-2"></div>
+</div>
+
+<!-- APP -->
+<div id="app" class="hidden max-w-container mx-auto px-6 py-6">
+
+  <!-- dashboard switcher -->
+  <div id="viewSwitch" class="flex items-center gap-2 mb-5">
+    <button id="sw-payroll" class="px-4 py-2 rounded-lg text-sm font-bold bg-ink text-white">💵 Payroll & Commissions</button>
+    <button id="sw-marketing" class="px-4 py-2 rounded-lg text-sm font-bold bg-white text-ink border border-line hover:border-brand">📈 Marketing</button>
+  </div>
+
+  <div id="view-payroll">
+
+  <!-- period bar -->
+  <div class="bg-white rounded-xl border border-line p-4 mb-4">
+    <div class="flex items-center justify-between flex-wrap gap-3">
+      <div class="flex items-center gap-2">
+        <button id="mPrev" class="w-8 h-8 rounded-md border border-line hover:border-brand">‹</button>
+        <div id="mLabel" class="font-bold text-ink w-40 text-center"></div>
+        <button id="mNext" class="w-8 h-8 rounded-md border border-line hover:border-brand">›</button>
+      </div>
+      <div id="weeks" class="flex items-center gap-2 flex-wrap"></div>
+      <div class="flex items-center gap-2">
+        <input id="cStart" type="date" class="rounded-md border border-line px-2 py-1.5 text-sm" />
+        <span class="text-muted text-sm">→</span>
+        <input id="cEnd" type="date" class="rounded-md border border-line px-2 py-1.5 text-sm" />
+        <button id="cGo" class="rounded-md bg-ink text-white text-xs font-semibold px-3 py-2">Custom</button>
+      </div>
+    </div>
+    <div id="periodLabel" class="text-xs text-muted mt-2"></div>
+  </div>
+
+  <!-- tabs -->
+  <div class="flex items-center gap-1 mb-4 border-b border-line">
+    <button data-tab="payroll" class="tab px-4 py-2 text-sm font-semibold border-b-2 border-brand text-ink">Payroll</button>
+    <button data-tab="detail"  class="tab px-4 py-2 text-sm font-semibold border-b-2 border-transparent text-muted hover:text-ink">Commission Detail</button>
+    <button data-tab="matrix" id="tabMatrix" class="tab px-4 py-2 text-sm font-semibold border-b-2 border-transparent text-muted hover:text-ink">Commission Matrix</button>
+  </div>
+
+  <!-- PAYROLL -->
+  <div id="t-payroll">
+    <div class="flex items-center justify-between mb-3">
+      <div id="payrollSummary" class="text-sm text-body"></div>
+      <button id="exportCsv" class="rounded-md bg-white border border-line text-ink text-xs font-semibold px-3 py-2 hover:border-brand">Export CSV</button>
+    </div>
+    <div class="bg-white rounded-xl border border-line overflow-hidden">
+      <table class="w-full text-sm">
+        <thead><tr class="text-left text-[11px] uppercase tracking-wide text-muted bg-surface">
+          <th class="py-2.5 px-3">Rep</th><th class="px-3">Team</th>
+          <th class="px-3 text-right">Hours</th><th class="px-3 text-right">Appts</th>
+          <th class="px-3 text-right">Commission</th><th class="px-3 text-right">Hourly Rate</th>
+          <th class="px-3 text-right">Hourly Pay</th><th class="px-3 text-right">Total Pay</th>
+        </tr></thead>
+        <tbody id="payrollRows"></tbody>
+        <tfoot id="payrollFoot" class="font-bold text-ink border-t-2 border-line"></tfoot>
+      </table>
+    </div>
+  </div>
+
+  <!-- DETAIL -->
+  <div id="t-detail" class="hidden">
+    <div class="flex items-center justify-between mb-3">
+      <div id="detailSummary" class="text-sm text-body"></div>
+      <select id="detailRep" class="rounded-md border border-line px-2 py-1.5 text-sm"><option value="">All reps</option></select>
+    </div>
+    <div class="bg-white rounded-xl border border-line overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead><tr class="text-left text-[11px] uppercase tracking-wide text-muted bg-surface">
+          <th class="py-2.5 px-3">Rep</th><th class="px-3">Customer</th><th class="px-3">Service</th>
+          <th class="px-3">Type</th><th class="px-3">Appt date</th><th class="px-3">Booked on</th>
+          <th class="px-3">Lead source</th><th class="px-3 text-right">Commission</th>
+        </tr></thead>
+        <tbody id="detailRows"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- MATRIX -->
+  <div id="t-matrix" class="hidden">
+    <p class="text-sm text-body mb-3">How much each appointment type pays, by service line. Edit a cell and it saves instantly — new bookings use these amounts.</p>
+    <div class="bg-white rounded-xl border border-line overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead><tr class="text-left text-[11px] uppercase tracking-wide text-muted bg-surface">
+          <th class="py-2.5 px-3">Service line</th>
+          <th class="px-3 text-right">🔍 Inspection</th><th class="px-3 text-right">🧰 Maintenance</th>
+          <th class="px-3 text-right">🔧 Repair / Replace</th><th class="px-3 text-right">📝 On-site Estimate</th>
+        </tr></thead>
+        <tbody id="matrixRows"></tbody>
+      </table>
+    </div>
+    <div id="matrixMsg" class="text-xs text-emerald-600 mt-2 h-4"></div>
+  </div>
+
+  </div><!-- /view-payroll -->
+
+  <!-- ===== MARKETING VIEW ===== -->
+  <div id="view-marketing" class="hidden">
+    <div class="flex items-center justify-between flex-wrap gap-3 mb-4">
+      <div>
+        <p class="uppercase text-xs font-semibold text-brand tracking-wide">Inbound · Windsor.ai</p>
+        <h2 class="text-lg font-bold text-ink">Marketing Performance</h2>
+        <p class="text-xs text-muted">GoHighLevel leads (source of truth) · Meta + Google Ads spend · Search Console organic</p>
+      </div>
+      <div class="flex items-center gap-1 flex-wrap">
+        <div id="mkRange" class="flex items-center gap-1">
+          <span class="text-xs text-muted mr-1">Range:</span>
+          <button data-r="last_7d" class="px-3 py-1.5 rounded-md border border-line text-xs font-semibold bg-white">7d</button>
+          <button data-r="last_30d" class="px-3 py-1.5 rounded-md border border-ink text-xs font-semibold bg-ink text-white">30d</button>
+          <button data-r="last_90d" class="px-3 py-1.5 rounded-md border border-line text-xs font-semibold bg-white">90d</button>
+        </div>
+        <span class="text-xs text-muted mx-1">or</span>
+        <input id="mkStart" type="date" class="rounded-md border border-line px-2 py-1.5 text-xs"/>
+        <span class="text-xs text-muted">→</span>
+        <input id="mkEnd" type="date" class="rounded-md border border-line px-2 py-1.5 text-xs"/>
+        <button id="mkApply" class="px-3 py-1.5 rounded-md bg-ink text-white text-xs font-semibold">Apply</button>
+      </div>
+    </div>
+
+    <div id="mkErr"></div>
+    <div id="mkStatus" class="text-sm text-muted py-3">Loading marketing data…</div>
+
+    <div id="mkDash" class="hidden">
+      <div class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-5" id="mkKpis"></div>
+
+      <!-- ===== OPPORTUNITIES (booking system) ===== -->
+      <div class="text-xs font-bold uppercase tracking-wider text-brand mb-2">Opportunities created · booking system</div>
+      <div class="grid md:grid-cols-2 gap-4 mb-6">
+        <div class="bg-white rounded-xl border border-line p-5">
+          <h3 class="text-sm font-bold text-ink uppercase tracking-wide mb-3">By company &amp; team</h3>
+          <table class="w-full text-sm"><thead><tr class="text-left text-[10px] uppercase tracking-wide text-muted border-b-2 border-line"><th class="py-2">Company</th><th class="text-right">Inbound</th><th class="text-right">Outbound</th><th class="text-right">Total</th></tr></thead>
+          <tbody id="mkCompRows"></tbody><tfoot id="mkCompFoot" class="font-bold text-ink border-t-2 border-line"></tfoot></table>
+        </div>
+        <div class="bg-white rounded-xl border border-line p-5">
+          <h3 class="text-sm font-bold text-ink uppercase tracking-wide mb-3">By lead platform</h3>
+          <table class="w-full text-sm"><thead><tr class="text-left text-[10px] uppercase tracking-wide text-muted border-b-2 border-line"><th class="py-2">Platform</th><th class="text-right">Opportunities</th><th class="text-right">Share</th></tr></thead>
+          <tbody id="mkOppPlatRows"></tbody></table>
+        </div>
+      </div>
+
+      <!-- ===== LEADS (marketing-generated) ===== -->
+      <div class="text-xs font-bold uppercase tracking-wider text-brand mb-2">Qualified leads · GoHighLevel</div>
+      <div class="text-[11px] text-muted mb-3">A contact counts as a lead only once it's attributed — by lead source or a channel tag a rep adds. Inbound calls/texts stay as <b id="mkUnqInline">0</b> unqualified contacts until qualified, and are tracked in the Twilio section below.</div>
+      <div class="grid md:grid-cols-2 gap-4 mb-6">
+        <div class="bg-white rounded-xl border border-line p-5">
+          <h3 class="text-sm font-bold text-ink uppercase tracking-wide mb-3">Qualified leads by source / tag</h3>
+          <table class="w-full text-sm"><thead><tr class="text-left text-[10px] uppercase tracking-wide text-muted border-b-2 border-line"><th class="py-2">Source</th><th class="text-right">Leads</th><th class="text-right">Share</th></tr></thead>
+          <tbody id="mkLeadRows"></tbody><tfoot id="mkLeadFoot" class="font-bold text-ink border-t-2 border-line"></tfoot></table>
+        </div>
+        <div class="bg-white rounded-xl border border-line p-5"><h3 class="text-sm font-bold text-ink uppercase tracking-wide mb-3">Lead mix</h3><canvas id="mkMix" style="max-height:240px"></canvas></div>
+      </div>
+
+      <!-- ===== PHONE CALLS (Twilio) ===== -->
+      <div class="text-xs font-bold uppercase tracking-wider text-brand mb-2">Phone calls · GoHighLevel</div>
+      <div class="text-[11px] text-muted mb-3">Real calls from GoHighLevel — one record per call (ring-group &amp; softphone legs already collapsed). Answered vs missed is inbound only. Switch between the whole team and an individual rep below (based on the GHL user on each call).</div>
+      <div id="mkCallTabs" class="flex items-center gap-1.5 flex-wrap mb-3"></div>
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4" id="mkCallKpis"></div>
+      <div class="grid md:grid-cols-3 gap-4 mb-6">
+        <div class="bg-white rounded-xl border border-line p-5" id="mkCallIn"></div>
+        <div class="bg-white rounded-xl border border-line p-5" id="mkCallOut"></div>
+        <div class="bg-white rounded-xl border border-line p-5"><h3 class="text-sm font-bold text-ink uppercase tracking-wide mb-3">Answered vs missed <span class="text-xs font-normal text-muted normal-case">· inbound only</span></h3><canvas id="mkCallMix" style="max-height:220px"></canvas></div>
+      </div>
+
+      <!-- ===== PAID + ORGANIC ===== -->
+      <div class="text-xs font-bold uppercase tracking-wider text-brand mb-2">Paid &amp; organic</div>
+      <div class="bg-white rounded-xl border border-line p-5 mb-4">
+        <h3 class="text-sm font-bold text-ink uppercase tracking-wide mb-3">Google Ads / LSA <span class="text-xs font-normal text-muted normal-case">· spend by brand / account</span></h3>
+        <canvas id="mkSpend" style="max-height:230px;margin-bottom:12px"></canvas>
+        <table class="w-full text-sm"><thead><tr class="text-left text-[10px] uppercase tracking-wide text-muted border-b-2 border-line"><th class="py-2">Source</th><th>Channel</th><th class="text-right">Spend</th><th class="text-right">Clicks</th><th class="text-right">Impr.</th><th class="text-right">Leads*</th><th class="text-right">Cost / Lead</th></tr></thead>
+        <tbody id="mkPaidRows"></tbody><tfoot id="mkPaidFoot" class="font-bold text-ink border-t-2 border-line"></tfoot></table>
+        <div class="text-[11px] text-muted mt-2">*Meta leads come from GoHighLevel (real attributed leads); Google rows show platform-reported conversions.</div>
+      </div>
+
+      <div class="bg-white rounded-xl border border-line p-5 mb-4">
+        <h3 class="text-sm font-bold text-ink uppercase tracking-wide mb-3">Facebook ad campaigns <span class="text-xs font-normal text-muted normal-case">· Meta Ads</span></h3>
+        <table class="w-full text-sm"><thead><tr class="text-left text-[10px] uppercase tracking-wide text-muted border-b-2 border-line"><th class="py-2">Campaign</th><th class="text-right">Spend</th><th class="text-right">Impr.</th><th class="text-right">Clicks</th><th class="text-right">CTR</th><th class="text-right">Leads</th><th class="text-right">Cost / Lead</th></tr></thead>
+        <tbody id="mkFbRows"></tbody><tfoot id="mkFbFoot" class="font-bold text-ink border-t-2 border-line"></tfoot></table>
+        <div id="mkFbNote" class="text-[11px] text-muted mt-2">Leads = Meta-reported on-platform lead actions per campaign.</div>
+      </div>
+
+      <div class="bg-white rounded-xl border border-line p-5 mb-4">
+        <h3 class="text-sm font-bold text-ink uppercase tracking-wide mb-3">Thumbtack leads by company <span class="text-xs font-normal text-muted normal-case">· webhook (true cost)</span></h3>
+        <table class="w-full text-sm"><thead><tr class="text-left text-[10px] uppercase tracking-wide text-muted border-b-2 border-line"><th class="py-2">Company</th><th class="text-right">Leads</th><th class="text-right">Spend</th><th class="text-right">Cost / Lead</th></tr></thead>
+        <tbody id="mkTtRows"></tbody><tfoot id="mkTtFoot" class="font-bold text-ink border-t-2 border-line"></tfoot></table>
+      </div>
+
+      <div class="bg-white rounded-xl border border-line p-5">
+        <h3 class="text-sm font-bold text-ink uppercase tracking-wide mb-3">Organic search by domain <span class="text-xs font-normal text-muted normal-case">· Search Console</span></h3>
+        <table class="w-full text-sm"><thead><tr class="text-left text-[10px] uppercase tracking-wide text-muted border-b-2 border-line"><th class="py-2">Domain</th><th class="text-right">Clicks</th><th class="text-right">Impr.</th><th class="text-right">CTR</th><th class="text-right">Avg pos.</th></tr></thead>
+        <tbody id="mkOrgRows"></tbody><tfoot id="mkOrgFoot" class="font-bold text-ink border-t-2 border-line"></tfoot></table>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+const SUPA_URL="https://andzztvmaleiefxcfjwh.supabase.co";
+const ANON="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFuZHp6dHZtYWxlaWVmeGNmandoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3OTA3OTMsImV4cCI6MjA5NzM2Njc5M30.3C9YUDfVmZmLRV__Jd5DBfzr14-zJXsVHJIp8z2u43Y";
+const APPT={inspection:'Inspection',maintenance:'Maintenance',repair_replace:'Repair / Replace',onsite_estimate:'On-site Estimate'};
+const APPT_ORDER=['inspection','maintenance','repair_replace','onsite_estimate'];
+const $=s=>document.querySelector(s);
+const money=n=>'$'+Number(n||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});
+const money0=n=>'$'+Number(n||0).toLocaleString(undefined,{maximumFractionDigits:0});
+const hoursFmt=h=>Number(h||0).toFixed(2)+'h';
+const fmtDate=iso=>iso?new Date(iso).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}):'—';
+const fmtDateTime=iso=>iso?new Date(iso).toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}):'—';
+let admin=null, period=null, viewMonth=new Date(), lastReport=null, matrixData=null;
+// EMBED = running inside the unified dashboard shell; isAdmin gates everyone-vs-own payroll + editing.
+const EMBED = new URLSearchParams(location.search).has('embed');
+let isAdmin = false;
+
+async function callAdmin(op,payload){
+  const r=await fetch(SUPA_URL+'/functions/v1/admin',{method:'POST',
+    headers:{'Content-Type':'application/json','Authorization':'Bearer '+ANON,'apikey':ANON},
+    body:JSON.stringify({actor_id:admin.id,pin:admin.pin,op,payload})});
+  const j=await r.json(); if(!r.ok) throw new Error(j.error||'error'); return j;
+}
+async function restGet(path){
+  const r=await fetch(SUPA_URL+'/rest/v1/'+path,{headers:{apikey:ANON,Authorization:'Bearer '+ANON}});
+  return r.ok?await r.json():[];
+}
+
+/* ---------- period helpers (Mon–Sun) ---------- */
+function startOfWeekMon(d){const x=new Date(d);const day=(x.getDay()+6)%7;x.setHours(0,0,0,0);x.setDate(x.getDate()-day);return x;}
+function ymd(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
+function weeksOfMonth(monthDate){
+  const first=new Date(monthDate.getFullYear(),monthDate.getMonth(),1);
+  const last=new Date(monthDate.getFullYear(),monthDate.getMonth()+1,0);
+  let w=startOfWeekMon(first); const out=[];
+  while(w<=last){ const end=new Date(w); end.setDate(end.getDate()+7); out.push({start:new Date(w),end:new Date(end)}); w=new Date(end); }
+  return out;
+}
+function periodLabel(p){
+  const s=p.start, e=new Date(p.end); e.setDate(e.getDate()-1);
+  return s.toLocaleDateString('en-US',{month:'short',day:'numeric'})+' – '+e.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+}
+
+/* ---------- auth ---------- */
+async function boot(){
+  // already signed in (via the shell or booking app)? Any active rep can view —
+  // admins/managers see the whole team's payroll; reps see only their own pay.
+  let saved=null; try{saved=JSON.parse(localStorage.getItem('advosy_rep'));}catch(e){}
+  if(saved && saved.pin){ admin=saved; isAdmin=(saved.role==='admin'||saved.role==='manager'); return start(); }
+  // standalone login screen (admins only — reps reach this through the shell)
+  const roster=await restGet('v_roster?select=id,full_name,role&role=eq.admin&is_active=eq.true&order=full_name');
+  const sel=$('#li_user'); sel.innerHTML='<option value="">Select your name…</option>'+roster.map(u=>`<option value="${u.id}">${u.full_name}</option>`).join('');
+  $('#li_go').onclick=doLogin; $('#li_pin').addEventListener('keydown',e=>{if(e.key==='Enter')doLogin();});
+}
+async function doLogin(){
+  const id=$('#li_user').value, pin=$('#li_pin').value.trim();
+  if(!id){$('#li_err').textContent='Pick your name.';return;}
+  if(pin.length<4){$('#li_err').textContent='Enter your PIN.';return;}
+  $('#li_err').textContent='Checking…';
+  admin={id,pin};
+  try{ await callAdmin('get_matrix',{}); // validates admin PIN + role
+    const u=(await restGet('v_roster?select=full_name&id=eq.'+id))[0];
+    admin.full_name=u?u.full_name:'Admin'; admin.role='admin';
+    try{localStorage.setItem('advosy_rep',JSON.stringify(admin));}catch(e){}
+    start();
+  }catch(e){ admin=null; $('#li_err').textContent='Not an admin or wrong PIN.'; }
+}
+function start(){
+  $('#login').classList.add('hide'); $('#login').style.display='none';
+  $('#app').classList.remove('hidden');
+  $('#who').textContent=admin.full_name||'Admin';
+  $('#signout').classList.remove('hidden');
+  $('#signout').onclick=()=>{try{localStorage.removeItem('advosy_rep');}catch(e){}; location.reload();};
+  // In the unified shell, the shell provides the global header + tabs + sign-out.
+  if(EMBED){
+    const hdr=$('#appHeader'); if(hdr) hdr.style.display='none';
+    const sw=$('#viewSwitch'); if(sw) sw.style.display='none';
+    const app=$('#app'); if(app){ app.classList.remove('py-6'); app.classList.add('py-4'); }
+  }
+  // Reps only ever see their own pay — hide team-only chrome (matrix editor).
+  if(!isAdmin){
+    const tm=$('#tabMatrix'); if(tm) tm.style.display='none';
+    const eb=$('#exportCsv'); if(eb) eb.style.display='none';
+    document.title='Advosy — My Pay & Marketing';
+  }
+  // default period: week containing today
+  viewMonth=new Date();
+  const wk=weeksOfMonth(viewMonth).find(w=>{const t=new Date();return t>=w.start&&t<w.end;}) || weeksOfMonth(viewMonth)[0];
+  period=wk;
+  renderWeeks(); loadReport(); if(isAdmin) loadMatrix(); setupTabs(); setupSwitcher();
+  // View switching when embedded — shell drives payroll/marketing via postMessage (+ hash fallback)
+  if(EMBED){
+    const applyHash=()=>{ const h=location.hash; showView(h==='#marketing'?'marketing':'payroll'); };
+    window.addEventListener('hashchange', applyHash);
+    window.addEventListener('message', e=>{ const d=e&&e.data; if(d&&d.type==='advosy-view'){ showView(d.view==='marketing'?'marketing':'payroll'); } });
+    applyHash();
+    try{ if(window.parent && window.parent!==window) window.parent.postMessage({type:'advosy-ready'},'*'); }catch(e){}
+  }
+  $('#mPrev').onclick=()=>{viewMonth=new Date(viewMonth.getFullYear(),viewMonth.getMonth()-1,1);renderWeeks();};
+  $('#mNext').onclick=()=>{viewMonth=new Date(viewMonth.getFullYear(),viewMonth.getMonth()+1,1);renderWeeks();};
+  $('#cGo').onclick=()=>{ const s=$('#cStart').value,e=$('#cEnd').value; if(!s||!e)return;
+    const st=new Date(s+'T00:00:00'); const en=new Date(e+'T00:00:00'); en.setDate(en.getDate()+1);
+    period={start:st,end:en}; document.querySelectorAll('.wk').forEach(b=>b.className=b.className.replace('bg-brand text-white','bg-white text-ink')); loadReport(); };
+  $('#exportCsv').onclick=exportCsv;
+}
+
+function renderWeeks(){
+  $('#mLabel').textContent=viewMonth.toLocaleDateString('en-US',{month:'long',year:'numeric'});
+  const wks=weeksOfMonth(viewMonth);
+  $('#weeks').innerHTML='';
+  wks.forEach(w=>{
+    const b=document.createElement('button');
+    const active=period&&+period.start===+w.start&&+period.end===+w.end;
+    b.className='wk rounded-md border border-line px-2.5 py-1.5 text-xs font-semibold '+(active?'bg-brand text-white':'bg-white text-ink hover:border-brand');
+    const e=new Date(w.end); e.setDate(e.getDate()-1);
+    b.textContent=w.start.toLocaleDateString('en-US',{month:'short',day:'numeric'})+'–'+e.toLocaleDateString('en-US',{day:'numeric'});
+    b.onclick=()=>{ period=w; renderWeeks(); loadReport(); };
+    $('#weeks').appendChild(b);
+  });
+}
+
+/* ---------- report ---------- */
+async function loadReport(){
+  $('#periodLabel').textContent='Period: '+periodLabel(period);
+  $('#payrollRows').innerHTML='<tr><td class="p-4 text-muted text-sm" colspan="8">Loading…</td></tr>';
+  try{
+    if(isAdmin){
+      const rep=await callAdmin('report',{start:period.start.toISOString(),end:period.end.toISOString()});
+      lastReport=rep; renderPayroll(rep); renderDetail(rep);
+    } else {
+      // Reps only see their own paycheck (my_pay returns just their row + their commission detail).
+      const r=await callAdmin('my_pay',{start:period.start.toISOString(),end:period.end.toISOString()});
+      const rep={ reps:[r.me], detail:r.detail||[], totals:{hours:r.me.hours,appts:r.me.appts,commission:r.me.commission,hourly_pay:r.me.hourly_pay,total:r.me.total} };
+      lastReport=rep; renderPayrollSelf(r.me); renderDetail(rep);
+    }
+  }catch(e){ $('#payrollRows').innerHTML='<tr><td class="p-4 text-danger text-sm" colspan="8">'+e.message+'</td></tr>'; }
+}
+// Read-only personal pay view for a non-admin rep (no rate/hours editing).
+function renderPayrollSelf(r){
+  $('#payrollSummary').textContent=`${r.full_name} · ${r.appts} appointment${r.appts===1?'':'s'} · ${money(r.commission)} commission · ${money(r.total)} total pay`;
+  $('#payrollRows').innerHTML=`
+    <tr class="border-t border-line">
+      <td class="py-2.5 px-3 font-semibold text-ink">${r.full_name}</td>
+      <td class="px-3 text-muted text-xs uppercase">${r.team||''}</td>
+      <td class="px-3 text-right tabular">${hoursFmt(r.hours)}</td>
+      <td class="px-3 text-right tabular">${r.appts}</td>
+      <td class="px-3 text-right tabular text-emerald-600 font-semibold">${money(r.commission)}</td>
+      <td class="px-3 text-right tabular">${money(r.hourly_rate)}</td>
+      <td class="px-3 text-right tabular">${money(r.hourly_pay)}</td>
+      <td class="px-3 text-right tabular font-bold text-ink">${money(r.total)}</td>
+    </tr>`;
+  $('#payrollFoot').innerHTML='';
+}
+function renderPayroll(rep){
+  const rows=rep.reps.filter(r=>r.hours>0||r.appts>0||r.commission>0||r.role!=='admin');
+  $('#payrollSummary').textContent=`${rep.reps.length} reps · ${rep.totals.appts} appointments · ${money(rep.totals.commission)} commissions · ${money(rep.totals.total)} total pay`;
+  $('#payrollRows').innerHTML=rep.reps.map(r=>`
+    <tr class="border-t border-line">
+      <td class="py-2.5 px-3 font-semibold text-ink">${r.full_name}</td>
+      <td class="px-3 text-muted text-xs uppercase">${r.team||''}</td>
+      <td class="px-3 text-right">
+        <span class="inline-flex items-center gap-1 justify-end">
+          <input data-hrep="${r.id}" value="${Number(r.hours).toFixed(2)}" title="${r.hours_overridden?('Manually set — clocked '+hoursFmt(r.clocked_hours)):'Clocked hours — type to override for this period'}" class="hrs w-16 text-right rounded border px-1 py-0.5 tabular ${r.hours_overridden?'border-brand text-brand font-semibold bg-brand/5':'border-line'}"/>
+          ${r.hours_overridden?`<button data-hrevert="${r.id}" title="Revert to clocked ${hoursFmt(r.clocked_hours)}" class="text-xs text-muted hover:text-danger leading-none">↺</button>`:'<span class="text-xs text-muted">h</span>'}
+        </span>
+      </td>
+      <td class="px-3 text-right tabular">${r.appts}</td>
+      <td class="px-3 text-right tabular text-emerald-600 font-semibold">${money(r.commission)}</td>
+      <td class="px-3 text-right">
+        <span class="inline-flex items-center">$<input data-rep="${r.id}" value="${Number(r.hourly_rate).toFixed(2)}" class="rate w-16 text-right rounded border border-line px-1 py-0.5 tabular"/></span>
+      </td>
+      <td class="px-3 text-right tabular">${money(r.hourly_pay)}</td>
+      <td class="px-3 text-right tabular font-bold text-ink">${money(r.total)}</td>
+    </tr>`).join('');
+  $('#payrollFoot').innerHTML=`<tr><td class="py-2.5 px-3" colspan="2">Team total</td>
+    <td class="px-3 text-right tabular">${hoursFmt(rep.totals.hours)}</td>
+    <td class="px-3 text-right tabular">${rep.totals.appts}</td>
+    <td class="px-3 text-right tabular text-emerald-600">${money(rep.totals.commission)}</td>
+    <td class="px-3"></td>
+    <td class="px-3 text-right tabular">${money(rep.totals.hourly_pay)}</td>
+    <td class="px-3 text-right tabular">${money(rep.totals.total)}</td></tr>`;
+  document.querySelectorAll('.rate').forEach(inp=>{
+    inp.onchange=async()=>{ const id=inp.dataset.rep, amount=Number(inp.value)||0;
+      try{ await callAdmin('update_rep',{id,hourly_rate:amount}); loadReport(); }catch(e){ alert(e.message); }
+    };
+  });
+  // Editable hours — overrides the clocked total for THIS period only.
+  document.querySelectorAll('.hrs').forEach(inp=>{
+    inp.onchange=async()=>{ const id=inp.dataset.hrep; const v=inp.value.trim(); const hours=v===''?null:Number(v);
+      if(hours!==null && (!isFinite(hours)||hours<0)){ alert('Enter a valid number of hours.'); loadReport(); return; }
+      try{ await callAdmin('set_hours',{user_id:id,start:period.start.toISOString(),end:period.end.toISOString(),hours}); loadReport(); }catch(e){ alert(e.message); }
+    };
+  });
+  document.querySelectorAll('[data-hrevert]').forEach(btn=>{
+    btn.onclick=async()=>{ const id=btn.dataset.hrevert;
+      try{ await callAdmin('set_hours',{user_id:id,start:period.start.toISOString(),end:period.end.toISOString(),hours:null}); loadReport(); }catch(e){ alert(e.message); }
+    };
+  });
+}
+function renderDetail(rep){
+  const sel=$('#detailRep'); const cur=sel.value;
+  sel.innerHTML='<option value="">All reps</option>'+rep.reps.map(r=>`<option value="${r.id}">${r.full_name}</option>`).join('');
+  sel.value=cur; sel.onchange=()=>drawDetail();
+  drawDetail();
+  function drawDetail(){
+    const f=sel.value; const rows=rep.detail.filter(d=>!f||d.user_id===f);
+    $('#detailSummary').textContent=`${rows.length} commissions · ${money(rows.reduce((a,d)=>a+d.amount,0))}`;
+    $('#detailRows').innerHTML=rows.length?rows.map(d=>`
+      <tr class="border-t border-line">
+        <td class="py-2.5 px-3 font-medium text-ink">${d.rep}</td>
+        <td class="px-3">${d.customer}${d.phone?'<div class="text-[11px] text-muted">'+d.phone+'</div>':''}</td>
+        <td class="px-3 capitalize">${(d.service_type||'').replace('_',' ')}</td>
+        <td class="px-3">${APPT[d.appointment_type]||d.appointment_type}</td>
+        <td class="px-3">${fmtDate(d.appt_date)}</td>
+        <td class="px-3 text-muted">${fmtDateTime(d.created_at)}</td>
+        <td class="px-3 text-xs text-muted">${[d.source,d.channel,d.campaign].filter(Boolean).join(' · ')}</td>
+        <td class="px-3 text-right tabular text-emerald-600 font-semibold">${money(d.amount)}</td>
+      </tr>`).join(''):'<tr><td class="p-4 text-muted text-sm" colspan="8">No commissions in this period.</td></tr>';
+  }
+}
+
+/* ---------- matrix ---------- */
+async function loadMatrix(){
+  try{ matrixData=await callAdmin('get_matrix',{}); renderMatrix(); }catch(e){}
+}
+function renderMatrix(){
+  const offered={}; (matrixData.catalog||[]).forEach(c=>{ offered[c.service_type]={label:c.label, types:(c.appointment_types||[]).map(t=>t.key)}; });
+  const amt={}; (matrixData.matrix||[]).forEach(m=>{ amt[m.service_type+'|'+m.appointment_type]=Number(m.amount); });
+  const services=Object.keys(offered);
+  $('#matrixRows').innerHTML=services.map(s=>`
+    <tr class="border-t border-line">
+      <td class="py-2.5 px-3 font-semibold text-ink">${offered[s].label}</td>
+      ${APPT_ORDER.map(t=>{
+        if(!offered[s].types.includes(t)) return '<td class="px-3 text-right text-line">—</td>';
+        const v=amt[s+'|'+t]; const val=(v==null?'':Number(v).toFixed(2));
+        return `<td class="px-3 text-right"><span class="inline-flex items-center justify-end">$<input data-s="${s}" data-t="${t}" value="${val}" class="mx w-16 text-right rounded border border-line px-1 py-0.5 tabular"/></span></td>`;
+      }).join('')}
+    </tr>`).join('');
+  document.querySelectorAll('.mx').forEach(inp=>{
+    inp.onchange=async()=>{ const s=inp.dataset.s,t=inp.dataset.t,amount=Number(inp.value)||0;
+      try{ await callAdmin('set_matrix',{service_type:s,appointment_type:t,amount}); $('#matrixMsg').textContent='Saved '+APPT[t]+' for '+s+' → '+money(amount); setTimeout(()=>$('#matrixMsg').textContent='',2500);
+      }catch(e){ $('#matrixMsg').textContent=e.message; }
+    };
+  });
+}
+
+/* ---------- tabs + csv ---------- */
+function setupTabs(){
+  document.querySelectorAll('.tab').forEach(b=>{
+    b.onclick=()=>{
+      document.querySelectorAll('.tab').forEach(x=>{x.className=x.className.replace('border-brand text-ink','border-transparent text-muted');});
+      b.className=b.className.replace('border-transparent text-muted','border-brand text-ink');
+      ['payroll','detail','matrix'].forEach(t=>$('#t-'+t).classList.add('hidden'));
+      $('#t-'+b.dataset.tab).classList.remove('hidden');
+    };
+  });
+}
+function exportCsv(){
+  if(!lastReport)return;
+  const head=['Rep','Team','Hours','Appointments','Commission','HourlyRate','HourlyPay','TotalPay'];
+  const lines=[head.join(',')].concat(lastReport.reps.map(r=>[
+    '"'+r.full_name+'"', r.team||'', r.hours.toFixed(2), r.appts, r.commission.toFixed(2), r.hourly_rate.toFixed(2), r.hourly_pay.toFixed(2), r.total.toFixed(2)
+  ].join(',')));
+  const blob=new Blob([lines.join('\n')],{type:'text/csv'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
+  a.download='advosy-payroll-'+ymd(period.start)+'.csv'; a.click();
+}
+
+/* ---------- Marketing (Windsor via marketing Edge Function) ---------- */
+let MKRANGE='last_30d', MKMODE='preset', MKFROM='', MKTO='', mkLoaded=false, mkSpendChart=null, mkMixChart=null, mkCallChart=null, mkCallsData=null, mkCallScope='team';
+const MKCOLORS=['#8b5cf6','#0ea5e9','#16a34a','#f59e0b','#ec4899','#64748b','#14b8a6'];
+const mMoney=n=>'$'+Number(n||0).toLocaleString('en-US',{maximumFractionDigits:0});
+const mMoney2=n=>'$'+Number(n||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+const mNum=n=>Number(n||0).toLocaleString('en-US');
+const mPct=n=>(Number(n||0)*100).toFixed(1)+'%';
+const cleanDomain=s=>String(s||'').replace('sc-domain:','').replace('https://','').replace('http://','').replace(/\/$/,'').replace('www.','');
+function showView(which){
+  const sp=$('#sw-payroll'), sm=$('#sw-marketing');
+  const on='px-4 py-2 rounded-lg text-sm font-bold bg-ink text-white', off='px-4 py-2 rounded-lg text-sm font-bold bg-white text-ink border border-line hover:border-brand';
+  if(which==='marketing'){ $('#view-marketing').classList.remove('hidden'); $('#view-payroll').classList.add('hidden'); if(sm)sm.className=on; if(sp)sp.className=off; if(!mkLoaded){ mkLoaded=true; loadMarketing(); } }
+  else { $('#view-payroll').classList.remove('hidden'); $('#view-marketing').classList.add('hidden'); if(sp)sp.className=on; if(sm)sm.className=off; }
+}
+function setupSwitcher(){
+  const sp=$('#sw-payroll'), sm=$('#sw-marketing');
+  if(sp) sp.onclick=()=>showView('payroll');
+  if(sm) sm.onclick=()=>showView('marketing');
+  $('#mkRange').addEventListener('click',e=>{ const b=e.target.closest('button[data-r]'); if(!b)return;
+    MKRANGE=b.dataset.r; MKMODE='preset';
+    document.querySelectorAll('#mkRange button').forEach(x=>x.className='px-3 py-1.5 rounded-md border border-line text-xs font-semibold bg-white');
+    b.className='px-3 py-1.5 rounded-md border border-ink text-xs font-semibold bg-ink text-white'; loadMarketing(); });
+  $('#mkApply').onclick=()=>{
+    const s=$('#mkStart').value, e=$('#mkEnd').value;
+    if(!s||!e){ alert('Pick both a start and end date.'); return; }
+    if(s>e){ alert('Start date must be before end date.'); return; }
+    MKMODE='custom'; MKFROM=s; MKTO=e;
+    document.querySelectorAll('#mkRange button').forEach(x=>x.className='px-3 py-1.5 rounded-md border border-line text-xs font-semibold bg-white');
+    loadMarketing();
+  };
+}
+async function loadMarketing(){
+  $('#mkErr').innerHTML=''; $('#mkStatus').style.display='block'; $('#mkDash').classList.add('hidden');
+  try{
+    const r=await fetch(SUPA_URL+'/functions/v1/marketing',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+ANON,'apikey':ANON},
+      body:JSON.stringify(MKMODE==='custom'?{actor_id:admin.id,pin:admin.pin,date_from:MKFROM,date_to:MKTO}:{actor_id:admin.id,pin:admin.pin,date_preset:MKRANGE})});
+    const d=await r.json(); if(!r.ok) throw new Error(d.error||('HTTP '+r.status));
+    if(!d.ok){ $('#mkStatus').style.display='none'; $('#mkErr').innerHTML='<div class="bg-amber-50 border border-amber-200 text-amber-800 rounded-lg px-4 py-3 text-sm">Marketing data isn’t connected yet — '+(d.reason||'set WINDSOR_API_KEY in Supabase Vault')+'.</div>'; return; }
+    renderMarketing(d);
+  }catch(e){ $('#mkStatus').style.display='none'; $('#mkErr').innerHTML='<div class="bg-red-50 border border-red-200 text-danger rounded-lg px-4 py-3 text-sm">Couldn’t load marketing data: '+e.message+'</div>'; }
+}
+function renderMarketing(d){
+  const tSpend=d.paid.reduce((a,r)=>a+r.spend,0), tClicks=d.paid.reduce((a,r)=>a+r.clicks,0), tImpr=d.paid.reduce((a,r)=>a+r.impressions,0);
+  const ttCost=(d.thumbtack&&d.thumbtack.cost)||0;          // Thumbtack lead cost
+  const obComm=Number(d.outboundCommissions)||0;            // outbound-rep commissions (acquisition cost)
+  // Meta spend: Windsor's account-level Facebook pull drops out intermittently, so fall back to the
+  // campaign-level total (fbCampaigns) so Facebook is ALWAYS counted. Take the higher of the sources.
+  const metaPaidSum=d.paid.filter(r=>r.ctag==='m').reduce((a,r)=>a+r.spend,0);
+  const fbCampSpend=(d.fbCampaigns||[]).reduce((a,r)=>a+r.spend,0);
+  const metaSpend=Math.max(metaPaidSum, fbCampSpend, Number(d.metaSpend)||0);
+  const nonMetaSpend=d.paid.filter(r=>r.ctag!=='m').reduce((a,r)=>a+r.spend,0);
+  const platformSpend=nonMetaSpend+metaSpend;                // all paid platforms incl. Meta
+  const totalAcq=platformSpend+ttCost+obComm;                // true total cost to acquire
+  const orgClicks=d.organic.reduce((a,r)=>a+r.clicks,0), orgImpr=d.organic.reduce((a,r)=>a+r.impressions,0);
+  const o=d.opportunities||{total:0,inbound:0,outbound:0,byCompany:[],byPlatform:[]};
+  $('#mkKpis').innerHTML=[
+    ['Opportunities',mNum(o.total),'booked in system',true],
+    ['Inbound opps',mNum(o.inbound),o.total?mPct(o.inbound/o.total)+' of opps':'',false],
+    ['Outbound opps',mNum(o.outbound),o.total?mPct(o.outbound/o.total)+' of opps':'',false],
+    ['Qualified leads',mNum(d.totalLeads),mNum(d.unqualifiedContacts||0)+' unqualified contacts',false],
+    ['Total ad spend',mMoney(totalAcq),`${mMoney(nonMetaSpend)} Google/LSA · ${mMoney(metaSpend)} Meta · ${mMoney(ttCost)} Thumbtack · ${mMoney(obComm)} comm`,true],
+  ].map(k=>`<div class="bg-white rounded-xl border ${k[3]?'border-brand':'border-line'} p-3"><div class="text-[11px] uppercase tracking-wide text-muted font-semibold">${k[0]}</div><div class="text-2xl font-extrabold text-ink mt-0.5 tabular-nums">${k[1]}</div><div class="text-[11px] text-muted">${k[2]}</div></div>`).join('');
+  // opportunities by company & team
+  $('#mkCompRows').innerHTML=o.byCompany.length?o.byCompany.map(c=>`<tr class="border-b border-line"><td class="py-2 font-semibold text-ink">${c.company}</td><td class="text-right">${mNum(c.inbound)}</td><td class="text-right">${mNum(c.outbound)}</td><td class="text-right font-bold">${mNum(c.total)}</td></tr>`).join(''):'<tr><td colspan="4" class="py-4 text-muted">No opportunities booked in this period yet — they’ll appear here as reps book through the system.</td></tr>';
+  $('#mkCompFoot').innerHTML=o.total?`<tr><td class="py-2">Total</td><td class="text-right">${mNum(o.inbound)}</td><td class="text-right">${mNum(o.outbound)}</td><td class="text-right">${mNum(o.total)}</td></tr>`:'';
+  // opportunities by lead platform
+  $('#mkOppPlatRows').innerHTML=(o.byPlatform||[]).map(p=>`<tr class="border-b border-line"><td class="py-2">${p.label}</td><td class="text-right font-bold">${mNum(p.n)}</td><td class="text-right text-muted">${o.total?mPct(p.n/o.total):'—'}</td></tr>`).join('');
+  $('#mkLeadRows').innerHTML=d.leads.map((r,i)=>`<tr class="border-b border-line"><td class="py-2"><span style="display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px;background:${MKCOLORS[i%MKCOLORS.length]}"></span>${r.source}</td><td class="text-right font-bold">${mNum(r.n)}</td><td class="text-right text-muted">${d.totalLeads?mPct(r.n/d.totalLeads):''}</td></tr>`).join('');
+  $('#mkLeadFoot').innerHTML=`<tr><td class="py-2">Total</td><td class="text-right">${mNum(d.totalLeads)}</td><td class="text-right">100%</td></tr>`;
+  { const u=$('#mkUnqInline'); if(u) u.textContent=mNum(d.unqualifiedContacts||0); }
+  // thumbtack by company (webhook)
+  const tt=d.thumbtack||{total:0,cost:0,byCompany:[]};
+  $('#mkTtRows').innerHTML=tt.byCompany.length?tt.byCompany.map(c=>`<tr class="border-b border-line"><td class="py-2 font-semibold text-ink capitalize">${c.company}</td><td class="text-right">${mNum(c.n)}</td><td class="text-right">${mMoney2(c.cost)}</td><td class="text-right text-emerald-600 font-semibold">${c.n?mMoney2(c.cost/c.n):'—'}</td></tr>`).join(''):'<tr><td colspan="4" class="py-4 text-muted">No Thumbtack webhook leads in range yet — point each company’s Thumbtack webhook at the endpoint and they’ll appear here.</td></tr>';
+  $('#mkTtFoot').innerHTML=tt.total?`<tr><td class="py-2">Total</td><td class="text-right">${mNum(tt.total)}</td><td class="text-right">${mMoney2(tt.cost)}</td><td class="text-right">${tt.total?mMoney2(tt.cost/tt.total):'—'}</td></tr>`:'';
+  $('#mkPaidRows').innerHTML=d.paid.map(r=>`<tr class="border-b border-line"><td class="py-2 font-semibold text-ink">${r.src}</td><td><span class="text-[10px] font-bold uppercase rounded-full px-2 py-0.5 ${r.ctag==='m'?'bg-violet-100 text-violet-700':r.ctag==='l'?'bg-green-100 text-green-700':'bg-sky-100 text-sky-700'}">${r.channel}</span></td><td class="text-right">${mMoney(r.spend)}</td><td class="text-right">${mNum(r.clicks)}</td><td class="text-right">${mNum(r.impressions)}</td><td class="text-right font-bold">${mNum(r.leads)}${r.platform?'<span class="text-muted text-[9px]"> conv</span>':''}</td><td class="text-right text-emerald-600 font-semibold">${r.leads?mMoney2(r.spend/r.leads):'—'}</td></tr>`).join('');
+  $('#mkPaidFoot').innerHTML=`<tr><td class="py-2" colspan="2">Total spend</td><td class="text-right">${mMoney(tSpend)}</td><td class="text-right">${mNum(tClicks)}</td><td class="text-right">${mNum(tImpr)}</td><td></td><td></td></tr>`;
+  // facebook campaigns
+  const fbc=d.fbCampaigns||[]; const fbS=fbc.reduce((a,r)=>a+r.spend,0), fbL=fbc.reduce((a,r)=>a+r.leads,0), fbI=fbc.reduce((a,r)=>a+r.impressions,0), fbCl=fbc.reduce((a,r)=>a+r.clicks,0);
+  const fbConn = d.fbConnected!==false;
+  { const note=$('#mkFbNote'); if(note){
+      note.className = fbConn ? 'text-[11px] text-muted mt-2' : 'text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded-md px-3 py-2 mt-2';
+      note.innerHTML = fbConn ? 'Leads = Meta-reported on-platform lead actions per campaign.' : '⚠️ <b>Meta Ads isn’t connected in Windsor</b>, so Facebook spend &amp; campaigns can’t load. Connect the Facebook data source at <a href="https://onboard.windsor.ai?datasource=facebook" target="_blank" class="underline font-semibold">onboard.windsor.ai</a> — campaigns (including zero-spend) will then appear here automatically.';
+  } }
+  $('#mkFbRows').innerHTML=fbc.length?fbc.map(c=>`<tr class="border-b border-line"><td class="py-2 font-medium text-ink">${c.campaign}</td><td class="text-right">${mMoney(c.spend)}</td><td class="text-right">${mNum(c.impressions)}</td><td class="text-right">${mNum(c.clicks)}</td><td class="text-right">${c.impressions?mPct(c.clicks/c.impressions):'—'}</td><td class="text-right font-bold">${mNum(c.leads)}</td><td class="text-right text-emerald-600 font-semibold">${c.leads?mMoney2(c.spend/c.leads):'—'}</td></tr>`).join(''):('<tr><td colspan="7" class="py-3 text-muted">'+(fbConn?'No Facebook campaign data in range.':'Meta Ads not connected in Windsor — see note below.')+'</td></tr>');
+  $('#mkFbFoot').innerHTML=fbc.length?`<tr><td class="py-2">Total</td><td class="text-right">${mMoney(fbS)}</td><td class="text-right">${mNum(fbI)}</td><td class="text-right">${mNum(fbCl)}</td><td class="text-right">${fbI?mPct(fbCl/fbI):'—'}</td><td class="text-right">${mNum(fbL)}</td><td class="text-right">${fbL?mMoney2(fbS/fbL):'—'}</td></tr>`:'';
+  $('#mkOrgRows').innerHTML=d.organic.length?d.organic.map(r=>`<tr class="border-b border-line"><td class="py-2 font-semibold text-ink">${cleanDomain(r.site)}</td><td class="text-right">${mNum(r.clicks)}</td><td class="text-right">${mNum(r.impressions)}</td><td class="text-right">${r.impressions?mPct(r.clicks/r.impressions):'—'}</td><td class="text-right">${r.position?r.position.toFixed(1):'—'}</td></tr>`).join(''):'<tr><td colspan="5" class="py-3 text-muted">No organic data in range.</td></tr>';
+  $('#mkOrgFoot').innerHTML=d.organic.length?`<tr><td class="py-2">Total</td><td class="text-right">${mNum(orgClicks)}</td><td class="text-right">${mNum(orgImpr)}</td><td class="text-right">${orgImpr?mPct(orgClicks/orgImpr):'—'}</td><td></td></tr>`:'';
+  const sp=$('#mkSpend'); if(mkSpendChart)mkSpendChart.destroy();
+  mkSpendChart=new Chart(sp,{type:'bar',data:{labels:d.paid.map(r=>(r.src||'').replace(' LLC','').replace('Advosy - ','').replace('Advosy ','')),datasets:[{data:d.paid.map(r=>r.spend),backgroundColor:'#8b5cf6',borderRadius:6}]},options:{plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>mMoney(c.raw)}}},scales:{y:{beginAtZero:true,ticks:{callback:v=>mMoney(v)}},x:{ticks:{font:{size:10}}}},responsive:true,maintainAspectRatio:false}});
+  const mx=$('#mkMix'); if(mkMixChart)mkMixChart.destroy();
+  mkMixChart=new Chart(mx,{type:'doughnut',data:{labels:d.leads.map(r=>r.source),datasets:[{data:d.leads.map(r=>r.n),backgroundColor:d.leads.map((r,i)=>MKCOLORS[i%MKCOLORS.length])}]},options:{plugins:{legend:{position:'right',labels:{boxWidth:12,font:{size:11}}}},responsive:true,maintainAspectRatio:false}});
+  // phone calls (GoHighLevel) — team + per-rep tabs
+  mkCallsData=d.calls||d.twilio||{inbound:0,outbound:0,total:0,answered:0,missed:0,answered_pct:0,inbound_answered:0,inbound_missed:0,inbound_answer_rate:0,outbound_connected:0,outbound_noanswer:0,outbound_connect_rate:0,byUser:[]};
+  if(mkCallScope!=='team' && !(mkCallsData.byUser||[]).some(u=>(u.user_id||'unassigned')===mkCallScope)) mkCallScope='team';
+  renderCallTabs(); renderCallScope();
+  $('#mkStatus').style.display='none'; $('#mkDash').classList.remove('hidden');
+}
+function renderCallTabs(){
+  const wrap=$('#mkCallTabs'); if(!wrap) return;
+  const d=mkCallsData; const users=(d&&d.byUser)||[];
+  const btn=(id,label,sub,active)=>`<button data-cscope="${id}" class="px-3 py-1.5 rounded-md border text-xs font-semibold whitespace-nowrap ${active?'border-ink bg-ink text-white':'border-line bg-white text-ink hover:border-brand'}">${label}${sub?` <span class="opacity-60">${sub}</span>`:''}</button>`;
+  let html=btn('team','👥 Team', d?('· '+mNum(d.total)):'', mkCallScope==='team');
+  html+=users.map(u=>btn(u.user_id||'unassigned', u.name, '· '+mNum(u.total), mkCallScope===(u.user_id||'unassigned'))).join('');
+  wrap.innerHTML=html;
+  wrap.querySelectorAll('button[data-cscope]').forEach(b=>b.onclick=()=>{ mkCallScope=b.dataset.cscope; renderCallTabs(); renderCallScope(); });
+}
+function renderCallScope(){
+  const d=mkCallsData; if(!d) return;
+  let tw=d, who='the whole team';
+  if(mkCallScope!=='team'){ const u=(d.byUser||[]).find(x=>(x.user_id||'unassigned')===mkCallScope); if(u){ tw=u; who=u.name; } }
+  $('#mkCallKpis').innerHTML=[
+    ['Inbound received',mNum(tw.inbound),'calls in',false],
+    ['Outbound made',mNum(tw.outbound),'calls out',false],
+    ['Total calls',mNum(tw.total),who,true],
+    ['Inbound answered',tw.inbound_answer_rate+'%',mNum(tw.inbound_answered)+' of '+mNum(tw.inbound)+' inbound',false],
+  ].map(k=>`<div class="bg-white rounded-xl border ${k[3]?'border-brand':'border-line'} p-3"><div class="text-[11px] uppercase tracking-wide text-muted font-semibold">${k[0]}</div><div class="text-2xl font-extrabold text-ink mt-0.5 tabular-nums">${k[1]}</div><div class="text-[11px] text-muted">${k[2]}</div></div>`).join('');
+  $('#mkCallIn').innerHTML=`<h3 class="text-sm font-bold text-ink uppercase tracking-wide mb-3">Inbound <span class="text-xs font-normal text-muted normal-case">· calls received</span></h3>
+    <div class="flex items-end justify-between mb-2"><div><div class="text-3xl font-extrabold text-ink tabular-nums">${tw.inbound_answer_rate}%</div><div class="text-[11px] text-muted">answer rate</div></div>
+    <div class="text-right text-sm"><div class="text-emerald-600 font-semibold">${mNum(tw.inbound_answered)} answered</div><div class="text-danger font-semibold">${mNum(tw.inbound_missed)} missed</div></div></div>
+    <div class="h-2 rounded-full bg-red-100 overflow-hidden"><div class="h-full bg-emerald-500" style="width:${tw.inbound_answer_rate}%"></div></div>`;
+  $('#mkCallOut').innerHTML=`<h3 class="text-sm font-bold text-ink uppercase tracking-wide mb-3">Outbound <span class="text-xs font-normal text-muted normal-case">· calls made</span></h3>
+    <div class="flex items-end justify-between mb-2"><div><div class="text-3xl font-extrabold text-ink tabular-nums">${tw.outbound_connect_rate}%</div><div class="text-[11px] text-muted">connect rate</div></div>
+    <div class="text-right text-sm"><div class="text-emerald-600 font-semibold">${mNum(tw.outbound_connected)} connected</div><div class="text-muted font-semibold">${mNum(tw.outbound_noanswer)} no answer</div></div></div>
+    <div class="h-2 rounded-full bg-zinc-100 overflow-hidden"><div class="h-full bg-emerald-500" style="width:${tw.outbound_connect_rate}%"></div></div>`;
+  const cm=$('#mkCallMix'); if(mkCallChart)mkCallChart.destroy();
+  mkCallChart=new Chart(cm,{type:'doughnut',data:{labels:['Answered','Missed'],datasets:[{data:[tw.inbound_answered,tw.inbound_missed],backgroundColor:['#10b981','#ef4444']}]},options:{plugins:{legend:{position:'right',labels:{boxWidth:12,font:{size:11}}}},responsive:true,maintainAspectRatio:false}});
+}
+
+boot();
+</script>
+</body>
+</html>

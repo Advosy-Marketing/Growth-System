@@ -1,0 +1,1493 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Advosy — Book a Service</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+// Advosy design tokens — matches advosy.com (Tailwind violet + zinc, system font)
+tailwind.config = {
+  theme: {
+    extend: {
+      colors: {
+        brand: { DEFAULT: '#8b5cf6', light: '#a78bfa' },
+        ink: '#18181b', body: '#3f3f46', muted: '#71717a',
+        line: '#e4e4e7', surface: '#f4f4f5', danger: '#ef4444',
+      },
+      fontFamily: { sans: ['ui-sans-serif','system-ui','-apple-system','Segoe UI','sans-serif'] },
+      maxWidth: { container: '1280px' },
+    }
+  }
+}
+</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  h1{letter-spacing:-1.2px} .eyebrow{letter-spacing:.7px}
+  @keyframes sp{to{transform:rotate(360deg)}} .spin{animation:sp .7s linear infinite}
+  /* Emergency button: flashing red light with red static-electricity bolts crackling out of it */
+  @keyframes emgFlash{
+    0%,100%{background:#ef4444;box-shadow:0 0 0 0 rgba(239,68,68,.5);}
+    50%{background:#b91c1c;box-shadow:0 0 20px 5px rgba(239,68,68,.9);}
+  }
+  .emg-on{position:relative;color:#fff !important;border-color:#ef4444 !important;animation:emgFlash .7s infinite;}
+</style>
+</head>
+<body class="font-sans text-body bg-white antialiased">
+
+<!-- ===== Header (matches site) ===== -->
+<header id="appHeader" class="sticky top-0 z-50 h-16 bg-ink/95 backdrop-blur-md border-b border-zinc-800">
+  <div class="max-w-container mx-auto h-full px-6 flex items-center justify-between">
+    <div class="flex items-center gap-3">
+      <span class="text-white font-bold text-lg tracking-tight">Advosy</span>
+      <span class="hidden md:inline text-zinc-400 text-xs">Growth Booking · Internal</span>
+    </div>
+    <span id="hdr-rep" class="text-zinc-300 text-sm font-medium">Not signed in</span>
+  </div>
+</header>
+
+<div id="root" class="max-w-container mx-auto px-6 pb-24"></div>
+<script>
+  // When embedded in the unified dashboard shell, hide this app's own top header
+  // (the shell provides the global tab bar + sign-out) and tighten the top padding.
+  if (new URLSearchParams(location.search).has('embed')) {
+    var _h=document.getElementById('appHeader'); if(_h) _h.style.display='none';
+    var _r=document.getElementById('root'); if(_r){ _r.classList.remove('pb-24'); _r.classList.add('pb-10'); }
+  }
+</script>
+
+<!-- ===== Footer (matches site) ===== -->
+<footer class="bg-ink text-zinc-300 mt-10">
+  <div class="max-w-container mx-auto px-6 py-8 flex flex-wrap justify-between gap-4 text-xs text-zinc-500">
+    <span>© 2026 Advosy. Internal Growth tool. Licensed AZ ROC318791 | NV 0086910.</span>
+    <span>One Call. Every Service.</span>
+  </div>
+</footer>
+
+<script type="text/babel">
+const {useState, useEffect, useRef} = React;
+
+/* ---------- CONFIG (mirrors service_catalog) ---------- */
+const APPT = {inspection:'Inspection', maintenance:'Maintenance', repair_replace:'Repair / Replace', onsite_estimate:'On-site Estimate', sold_customer:'New Sold Customer'};
+const APPT_EMOJI = {inspection:'🔍', maintenance:'🧰', repair_replace:'🔧', onsite_estimate:'📝', sold_customer:'💰'};
+const WEEKDAYS = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+// Pestkee sale categories for a "New Sold Customer" (sold on the phone, no appointment).
+const SALE_OPTIONS = ['Pest Membership','Weed Treatment','Termite Treatment','Mosquito Treatment','Bed Bug Treatment','Flea & Tick Treatment','Specialty Roach Treatment','Rodent / Pigeon Treatment','Other'];
+const CATALOG = [
+  {key:'roofing',      label:'Roofing',       brand:'Advosy Construction (VRZA)', provider:'ghl',          types:['inspection','maintenance','repair_replace','onsite_estimate'], addons:['restoration','pest_control']},
+  {key:'restoration',  label:'Restoration',   brand:'Bloque',                     provider:'ghl',          types:['inspection','repair_replace','onsite_estimate'],               addons:['roofing']},
+  {key:'hvac',         label:'Heating & Air', brand:'Everest',                    provider:'servicetitan', types:['maintenance','repair_replace','onsite_estimate'],              addons:['plumbing','pest_control']},
+  {key:'plumbing',     label:'Plumbing',      brand:'Everest',                    provider:'servicetitan', types:['inspection','maintenance','repair_replace','onsite_estimate'], addons:['hvac']},
+  {key:'pest_control', label:'Pest Control',  brand:'Pestkee',                    provider:'fieldroutes',  types:['inspection','maintenance','onsite_estimate','sold_customer'],  addons:['hvac']},
+];
+const byKey = k => CATALOG.find(c=>c.key===k);
+// ServiceTitan two-tier: appointment tile -> specific job type {label, jt=jobTypeId, bu=businessUnitId}
+const ST_JOBTYPES = {
+  hvac: {
+    maintenance:    [{label:'Tune Up', jt:'520', bu:'34467848'}, {label:'Member Maintenance', jt:'596', bu:'34467848'}],
+    repair_replace: [{label:'No Cool', jt:'532', bu:'34471398'}, {label:'No Heat', jt:'533', bu:'34471398'}, {label:'HVAC Scheduled Repair', jt:'15640934', bu:'34471398'}, {label:'Split System Install', jt:'556', bu:'34473923'}, {label:'Package System Install', jt:'37673021', bu:'34473923'}],
+    onsite_estimate:[{label:'New System Estimate', jt:'29705439', bu:'34473410'}, {label:'Ductless System Estimate', jt:'33135295', bu:'34473410'}, {label:'Home Performance Estimate', jt:'34491961', bu:'34473410'}],
+  },
+  plumbing: {
+    inspection:     [{label:'Plumbing Inspection', jt:'34491833', bu:'34470090'}],
+    maintenance:    [{label:'Water Heater Flush / Tune Up', jt:'34491833', bu:'34470090'}],
+    repair_replace: [{label:'Clogged Drain', jt:'34491449', bu:'34470090'}, {label:'Leaky Faucet', jt:'34491577', bu:'34470090'}, {label:'No Hot Water', jt:'34490937', bu:'34470090'}, {label:'Pipe Leak', jt:'34491321', bu:'34470090'}, {label:'Slab Leak', jt:'34491705', bu:'34470090'}, {label:'Install Water Heater', jt:'37678905', bu:'34470093'}, {label:'Install Toilet', jt:'37672255', bu:'34470093'}],
+    onsite_estimate:[{label:'Plumbing Estimate', jt:'34912698', bu:'34464863'}],
+  },
+};
+const stJobTypes = (svc, appt) => (ST_JOBTYPES[svc] && ST_JOBTYPES[svc][appt]) || [];
+const PROV = {
+  servicetitan:{label:'ServiceTitan', note:'Capacity API', dot:'#0ea5e9'},
+  ghl:{label:'GoHighLevel', note:'Free-Slots + round-robin', dot:'#8b5cf6'},
+  fieldroutes:{label:'FieldRoutes', note:'Spots', dot:'#10b981'},
+};
+const CHANNELS = [['meta_ads','Meta Ads'],['lsa','LSA (Local Services Ads)'],['thumbtack','Thumbtack'],['outbound_calling','Outbound Calling'],['organic_social','Organic Social'],['jobsite_marketing','Jobsite Marketing'],['eddm','EDDM (Direct Mail)'],['b2b_affiliate','B2B Affiliate'],['other','Other']];
+const CAMPAIGNS = [['demand_generation','Demand Generation'],['high_intent','High Intent'],['we_are_advosy','We Are Advosy'],['sales_enablement','Sales Enablement'],['brand_awareness','Brand Awareness'],['other','Other']];
+
+const GHL_REPS = {roofing:['Marcus T.','Dana R.','Luis P.'], restoration:['Priya S.','Evan K.']};
+const AREAS = ['Mesa','Gilbert','Chandler','Tempe','Scottsdale','Queen Creek','Apache Junction'];
+const DRIVE_BUFFER = 30; // minutes — a slot is "too tight" if drive from the prior job exceeds this
+
+/* ---------- LIVE + MOCK availability ----------
+   Roofing + Restoration (GHL) pull LIVE slots from the deployed Supabase function.
+   ServiceTitan + FieldRoutes lines stay simulated until those adapters are wired. */
+const SUPA_URL = "https://andzztvmaleiefxcfjwh.supabase.co";
+const SUPA_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFuZHp6dHZtYWxlaWVmeGNmandoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3OTA3OTMsImV4cCI6MjA5NzM2Njc5M30.3C9YUDfVmZmLRV__Jd5DBfzr14-zJXsVHJIp8z2u43Y";
+const fmtDayFull = iso => new Intl.DateTimeFormat('en-US',{weekday:'long',month:'long',day:'numeric',timeZone:'America/Phoenix'}).format(new Date(iso));
+const fmtKeyAZ = iso => new Intl.DateTimeFormat('en-CA',{timeZone:'America/Phoenix'}).format(new Date(iso)); // YYYY-MM-DD
+const fmtTime = iso => new Intl.DateTimeFormat('en-US',{hour:'numeric',minute:'2-digit',timeZone:'America/Phoenix'}).format(new Date(iso));
+const ymd = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+const fullDateKey = key => new Date(key+'T12:00:00').toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'});
+
+async function getAvailability(serviceKey, opts){
+  const svc = byKey(serviceKey);
+  if(svc.provider==='ghl'||svc.provider==='servicetitan') return await fetchLiveSlots(serviceKey, opts);
+  return mockSlots(serviceKey);
+}
+
+async function fetchLiveSlots(serviceKey, opts){
+  const now = Date.now();
+  const body={service_type:serviceKey, start_date:now, end_date:now+7*86400000, timezone:'America/Phoenix'};
+  if(opts&&opts.jobTypeId) body.job_type_id=opts.jobTypeId;
+  if(opts&&opts.buId) body.business_unit_id=opts.buId;
+  const res = await fetch(`${SUPA_URL}/functions/v1/availability`,{
+    method:'POST',
+    headers:{'Content-Type':'application/json','Authorization':`Bearer ${SUPA_ANON}`},
+    body:JSON.stringify(body)
+  });
+  const data = await res.json();
+  if(!res.ok) throw new Error(data.error || ('HTTP '+res.status));
+  return (data.slots||[]).map((s,i)=>({
+    id:serviceKey+'-live-'+i, dateKey:fmtKeyAZ(s.start), day:fmtDayFull(s.start),
+    time:fmtTime(s.start)+(s.end?(' – '+fmtTime(s.end)):''),
+    who:'Assigned at booking', slotStart:s.start, slotEnd:s.end, drive:{live:true}
+  }));
+}
+
+function mockSlots(serviceKey){
+  const svc = byKey(serviceKey), slots=[];
+  const times = svc.provider==='fieldroutes' ? ['8:00–10:00 AM','10:00–12:00 PM','1:00–3:00 PM']
+              : svc.provider==='servicetitan' ? ['8–10 AM','10–12 PM','12–2 PM','2–4 PM']
+              : ['9:00 AM','11:00 AM','1:00 PM','3:00 PM'];
+  let dn = new Date();
+  for(let d=0; d<12; d++){
+    dn = new Date(dn.getTime()+86400000);
+    while(dn.getDay()===0||dn.getDay()===6) dn = new Date(dn.getTime()+86400000);
+    const dayLbl = dn.toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'});
+    const dateKey = ymd(dn);
+    times.forEach((t,i)=>{
+      if(Math.random()<0.25) return;
+      let who='', drive=null;
+      if(svc.provider==='ghl'){const pool=GHL_REPS[serviceKey]; who='Round-robin → '+pool[(d+i)%pool.length];}
+      else if(svc.provider==='servicetitan'){who='Auto-assign (dispatch)';}
+      else {who='Route '+(10+((d+i)%4))+' · Tech '+['Sam G.','Will R.','Jo M.'][(d+i)%3];}
+      // Drive-time guard. ServiceTitan handles zoning itself; GHL/FieldRoutes get our check.
+      if(svc.provider==='servicetitan'){ drive={handled:true}; }
+      else if(i===0){ drive={first:true, fits:true}; }
+      else {
+        const mins = 12 + Math.round(Math.random()*38); // 12–50 min from the rep's prior job
+        drive = {mins, fromArea:AREAS[(d+i*3)%AREAS.length], fits: mins<=DRIVE_BUFFER};
+      }
+      slots.push({id:serviceKey+'-'+d+'-'+i, dateKey, day:dayLbl, time:t, who, drive});
+    });
+  }
+  return slots;
+}
+function createBooking(item){
+  const p=item.provider;
+  const ref = p==='servicetitan' ? 'ST-JOB-'+(40000+Math.floor(Math.random()*9999))
+            : p==='ghl'          ? 'GHL-APT-'+Math.random().toString(36).slice(2,9)
+            :                      'FR-APT-'+(700000+Math.floor(Math.random()*99999));
+  return {provider_ref:ref, assigned_rep:item.slot.who.replace('Round-robin → ',''), status:'booked'};
+}
+
+/* ---------- shared class strings ---------- */
+const inp = "w-full rounded-md border border-line px-3 py-2 text-sm text-ink bg-white focus:outline-none focus:border-brand focus:ring-2 focus:ring-brand/20";
+const fld = "block text-xs font-semibold text-muted mb-1";
+const btn = "rounded-md bg-brand hover:bg-brand-light text-white font-medium px-5 py-2.5 text-sm disabled:opacity-40 disabled:cursor-not-allowed transition";
+const btnGhost = "rounded-md bg-white ring-1 ring-line text-body font-medium px-5 py-2.5 text-sm hover:bg-surface transition";
+
+function Badge({p}){
+  return (
+    <span className="inline-flex items-center gap-1.5 rounded-full bg-surface px-2.5 py-0.5 text-[11px] font-semibold text-ink">
+      <span className="w-1.5 h-1.5 rounded-full" style={{background:PROV[p].dot}}></span>{PROV[p].label}
+    </span>
+  );
+}
+function Section({n,title,extra}){
+  return (
+    <div className="flex items-center gap-3 mt-10 mb-4">
+      <span className="w-7 h-7 rounded-full bg-ink text-white text-xs font-bold flex items-center justify-center">{n}</span>
+      <h2 className="text-xl font-bold text-ink">{title}</h2>
+      {extra}
+    </div>
+  );
+}
+
+/* Verified-address search. Primary: Google Places via our `places` Edge Function (API key stays
+   server-side), restricted to US + Arizona/Nevada, returning STRUCTURED components (street/city/state/zip)
+   so ServiceTitan/GHL get clean fields. Falls back to OpenStreetMap/Photon if Places is unavailable. */
+const US_STATE_ABBR = {Arizona:'AZ', Nevada:'NV'};
+const stateAbbr = s => US_STATE_ABBR[s] || (s && s.length===2 ? s.toUpperCase() : (s||''));
+const AZNV_BBOX = '-120.2,31.2,-108.9,42.1';
+async function placesCall(payload){
+  const r=await fetch(`${SUPA_URL}/functions/v1/places`,{method:'POST',
+    headers:{'Content-Type':'application/json','Authorization':'Bearer '+SUPA_ANON,'apikey':SUPA_ANON},
+    body:JSON.stringify(payload)});
+  if(!r.ok) throw new Error('places '+r.status);
+  return await r.json();
+}
+function AddressInput({value,onChange}){
+  const [q,setQ]=useState(value||'');
+  const [results,setResults]=useState([]);
+  const [open,setOpen]=useState(false);
+  const [busy,setBusy]=useState(false);
+  const tRef = React.useRef(null);
+  function photonComps(p){
+    const street=[p.housenumber,p.street||p.name].filter(Boolean).join(' ');
+    const city=p.city||p.town||p.village||p.locality||p.district||p.county||'';
+    const state=stateAbbr(p.state||''); const zip=p.postcode||'';
+    const formatted=[street, city, [state,zip].filter(Boolean).join(' ')].filter(Boolean).join(', ');
+    return {formatted, street, city, state, zip};
+  }
+  async function photonSearch(v){
+    const r=await fetch(`https://photon.komoot.io/api/?q=${encodeURIComponent(v)}&limit=10&lang=en&lat=35.5&lon=-113&bbox=${AZNV_BBOX}`);
+    const d=await r.json(); const seen=new Set(); const out=[];
+    for(const f of (d.features||[])){ const p=f.properties||{};
+      if(p.countrycode!=='US') continue; if(p.state!=='Arizona'&&p.state!=='Nevada') continue;
+      const c=photonComps(p); if(c.street&&c.formatted&&!seen.has(c.formatted)){ seen.add(c.formatted); out.push({description:c.formatted, comps:c}); } }
+    return out;
+  }
+  function onType(v){
+    setQ(v); onChange(v); setOpen(true); // free typing clears any selected components
+    if(tRef.current) clearTimeout(tRef.current);
+    if(v.trim().length<3){ setResults([]); return; }
+    tRef.current=setTimeout(async()=>{
+      try{
+        const d=await placesCall({op:'autocomplete', input:v});
+        let out=(d.predictions||[]).map(p=>({placeId:p.placeId, description:p.description}));
+        if(out.length===0){ try{ out=await photonSearch(v); }catch(e){} }
+        setResults(out);
+      }catch(e){ try{ setResults(await photonSearch(v)); }catch(_){ setResults([]); } }
+    },280);
+  }
+  async function choose(r){
+    setOpen(false); setResults([]);
+    if(r.comps){ setQ(r.comps.formatted); onChange(r.comps.formatted, r.comps); return; }
+    setQ(r.description); onChange(r.description); setBusy(true);
+    try{
+      const d=await placesCall({op:'details', place_id:r.placeId});
+      if(d&&d.formatted){ const c={formatted:d.formatted, street:d.street, city:d.city, state:d.state, zip:d.zip}; setQ(d.formatted); onChange(d.formatted, c); }
+      else { onChange(r.description, {formatted:r.description, street:'', city:'', state:'', zip:''}); }
+    }catch(e){ onChange(r.description, {formatted:r.description, street:'', city:'', state:'', zip:''}); }
+    finally{ setBusy(false); }
+  }
+  return (
+    <div className="relative">
+      <input className={inp} value={q} placeholder="Start typing an AZ or NV address…"
+        onChange={e=>onType(e.target.value)} onFocus={()=>q&&results.length&&setOpen(true)}
+        onBlur={()=>setTimeout(()=>setOpen(false),150)} />
+      {busy && <div className="absolute right-3 top-2.5 text-xs text-muted">…</div>}
+      {open && results.length>0 && (
+        <div className="absolute z-30 mt-1 w-full bg-white border border-line rounded-md shadow-lg max-h-56 overflow-auto">
+          {results.map((r,i)=>(
+            <button key={i} type="button" onMouseDown={()=>choose(r)}
+              className="block w-full text-left px-3 py-2 text-sm text-ink hover:bg-surface border-b border-line last:border-0">{r.description}</button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ---------- Time-clock + commissions (same Supabase project) ---------- */
+let _sb=null;
+function getSb(){ if(!_sb && window.supabase) _sb=window.supabase.createClient(SUPA_URL,SUPA_ANON,{realtime:{params:{eventsPerSecond:5}}}); return _sb; }
+async function callClock(rep,action){
+  const r=await fetch(SUPA_URL+'/functions/v1/clock',{method:'POST',
+    headers:{'Content-Type':'application/json','Authorization':'Bearer '+SUPA_ANON,'apikey':SUPA_ANON},
+    body:JSON.stringify({user_id:rep.id,pin:rep.pin,action})});
+  const j=await r.json(); if(!r.ok) throw new Error(j.error||'error'); return j;
+}
+async function loadRoster(){ const sb=getSb(); if(!sb) return []; const {data}=await sb.from('v_roster').select('*').eq('is_active',true).order('full_name'); return data||[]; }
+const TC={
+  weekStart(){const d=new Date();const day=(d.getDay()+6)%7;d.setHours(0,0,0,0);d.setDate(d.getDate()-day);return d.getTime();},
+  eMs(e,since){const a=new Date(e.clock_in).getTime();const b=e.clock_out?new Date(e.clock_out).getTime():Date.now();if(since&&b<since)return 0;return b-Math.max(a,since||0);},
+  money(n){return '$'+Number(n||0).toLocaleString(undefined,{maximumFractionDigits:2});},
+  hm(ms){const m=Math.floor((ms||0)/60000);return Math.floor(m/60)+'h '+String(m%60).padStart(2,'0')+'m';},
+  initials(n){return (n||'?').split(/\s+/).map(w=>w[0]).slice(0,2).join('').toUpperCase();},
+  colorFor(u){return (u&&u.color)||('hsl('+(Math.abs([...((u&&u.id)||'x')].reduce((a,c)=>a+c.charCodeAt(0),0))*47%360)+' 55% 48%)');},
+};
+
+/* Login gate — authenticate with name + PIN (validated against app_users via the clock fn). */
+function Login({onAuth}){
+  const [roster,setRoster]=useState([]); const [uid,setUid]=useState('');
+  const [pin,setPin]=useState(''); const [err,setErr]=useState(''); const [busy,setBusy]=useState(false);
+  const [mode,setMode]=useState('signin'); // 'signin' | 'reset'
+  const [cur,setCur]=useState(''); const [np,setNp]=useState(''); const [np2,setNp2]=useState(''); const [msg,setMsg]=useState('');
+  useEffect(()=>{ loadRoster().then(setRoster).catch(()=>setErr('Could not reach the server.')); },[]);
+  async function submit(){
+    if(!uid){setErr('Select your name.');return;}
+    if(pin.trim().length<4){setErr('Enter your PIN.');return;}
+    setBusy(true); setErr('Checking…');
+    try{ await callClock({id:uid,pin:pin.trim()},'status');
+      const u=roster.find(x=>x.id===uid);
+      onAuth({id:uid, full_name:u.full_name, pin:pin.trim(), role:u.role, team:u.team});
+    }catch(e){ setErr('Wrong PIN. Try again.'); setBusy(false); }
+  }
+  async function resetPin(){
+    setMsg('');
+    if(!uid){setErr('Select your name.');return;}
+    if(cur.trim().length<4){setErr('Enter your current PIN.');return;}
+    if(!/^\d{4,6}$/.test(np.trim())){setErr('New PIN must be 4–6 digits.');return;}
+    if(np.trim()!==np2.trim()){setErr('New PINs don’t match.');return;}
+    setBusy(true); setErr('Updating…');
+    try{
+      const r=await fetch(SUPA_URL+'/functions/v1/clock',{method:'POST',
+        headers:{'Content-Type':'application/json','Authorization':'Bearer '+SUPA_ANON,'apikey':SUPA_ANON},
+        body:JSON.stringify({user_id:uid,pin:cur.trim(),action:'set_pin',new_pin:np.trim()})});
+      const j=await r.json(); if(!r.ok) throw new Error(j.error||'Could not update PIN.');
+      setMode('signin'); setPin(''); setCur(''); setNp(''); setNp2(''); setErr(''); setBusy(false);
+      setMsg('PIN updated — sign in with your new PIN.');
+    }catch(e){ setErr(e.message||'Could not update PIN.'); setBusy(false); }
+  }
+  return (
+    <div className="max-w-md mx-auto mt-16 bg-white rounded-xl border border-line p-7 shadow-sm">
+      <p className="eyebrow uppercase text-xs font-semibold text-brand mb-2">Growth Team</p>
+      <h1 className="text-2xl font-bold text-ink mb-1">{mode==='reset'?'Reset your PIN':'Sign in to book'}</h1>
+      <p className="text-sm text-body mb-5">{mode==='reset'?'Enter your current PIN and choose a new one. If you haven’t set one yet, your current PIN is 1234.':'Appointments you create are automatically credited to you — no need to pick a setter.'}</p>
+      <label className={fld}>Your name</label>
+      <select className={inp+" mb-3"} value={uid} onChange={e=>{setUid(e.target.value); setErr(''); setMsg('');}}>
+        <option value="">Select your name…</option>
+        {roster.map(u=><option key={u.id} value={u.id}>{u.full_name}</option>)}
+      </select>
+      {mode==='signin' ? (
+        <>
+          <label className={fld}>PIN</label>
+          <input className={inp} type="password" inputMode="numeric" maxLength={6} value={pin}
+            onChange={e=>setPin(e.target.value)} onKeyDown={e=>e.key==='Enter'&&submit()} placeholder="••••" />
+          <button className={btn+" w-full mt-4"} disabled={busy} onClick={submit}>Sign in</button>
+          <button className="w-full mt-3 text-xs text-brand font-semibold hover:underline" onClick={()=>{setMode('reset');setErr('');setMsg('');}}>Reset / change my PIN</button>
+        </>
+      ) : (
+        <>
+          <label className={fld}>Current PIN <span className="text-muted font-normal normal-case">(1234 if you haven’t set one)</span></label>
+          <input className={inp+" mb-3"} type="password" inputMode="numeric" maxLength={6} value={cur} onChange={e=>setCur(e.target.value)} placeholder="••••" />
+          <label className={fld}>New PIN</label>
+          <input className={inp+" mb-3"} type="password" inputMode="numeric" maxLength={6} value={np} onChange={e=>setNp(e.target.value)} placeholder="4–6 digits" />
+          <label className={fld}>Confirm new PIN</label>
+          <input className={inp} type="password" inputMode="numeric" maxLength={6} value={np2} onChange={e=>setNp2(e.target.value)} onKeyDown={e=>e.key==='Enter'&&resetPin()} placeholder="re-enter" />
+          <button className={btn+" w-full mt-4"} disabled={busy} onClick={resetPin}>Update PIN</button>
+          <button className="w-full mt-3 text-xs text-brand font-semibold hover:underline" onClick={()=>{setMode('signin');setErr('');}}>← Back to sign in</button>
+        </>
+      )}
+      {err && <div className="text-xs text-danger mt-2">{err}</div>}
+      {msg && <div className="text-xs text-emerald-600 mt-2 font-semibold">{msg}</div>}
+    </div>
+  );
+}
+
+/* Inline team leaderboard — clocked-in hours + commissions earned, ranked, live. */
+function Leaderboard({rep}){
+  const [roster,setRoster]=useState([]); const [entries,setEntries]=useState([]); const [comms,setComms]=useState([]);
+  const [,setTick]=useState(0); const [busy,setBusy]=useState(false);
+  useEffect(()=>{
+    const sb=getSb(); if(!sb) return; let alive=true;
+    async function load(){
+      const ws=new Date(TC.weekStart()).toISOString();
+      try{
+        const [r,e,c]=await Promise.all([
+          sb.from('v_roster').select('*').eq('is_active',true).order('full_name'),
+          sb.from('time_entries').select('*').gte('clock_in',new Date(Date.now()-1209600000).toISOString()),
+          sb.from('commissions').select('*').gte('created_at',ws)
+        ]);
+        if(!alive) return; setRoster(r.data||[]); setEntries(e.data||[]); setComms(c.data||[]);
+      }catch(ex){}
+    }
+    load();
+    const ch=sb.channel('lb-rt')
+      .on('postgres_changes',{event:'*',schema:'public',table:'time_entries'},load)
+      .on('postgres_changes',{event:'*',schema:'public',table:'commissions'},load)
+      .on('postgres_changes',{event:'*',schema:'public',table:'app_users'},load)
+      .subscribe();
+    const t=setInterval(()=>setTick(x=>x+1),1000);
+    return ()=>{alive=false;clearInterval(t);try{sb.removeChannel(ch)}catch(e){}};
+  },[]);
+  const ws=TC.weekStart();
+  const openBy={}; entries.forEach(e=>{if(!e.clock_out)openBy[e.user_id]=e;});
+  const rows=roster.map(u=>{
+    let hours=0; entries.filter(e=>e.user_id===u.id).forEach(e=>hours+=TC.eMs(e,ws));
+    const comm=comms.filter(c=>c.user_id===u.id).reduce((a,c)=>a+Number(c.amount),0);
+    return {u,hours,comm,open:openBy[u.id]};
+  }).sort((a,b)=> b.comm-a.comm || b.hours-a.hours);
+  const onNow=rows.filter(r=>r.open).length;
+  const teamComm=rows.reduce((a,r)=>a+r.comm,0);
+  const meOpen=!!openBy[rep.id];
+  async function toggleClock(){ if(busy)return; setBusy(true); try{await callClock(rep,'toggle');}catch(e){} setBusy(false); }
+  return (
+    <div className="bg-white rounded-xl border border-line p-5">
+      <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+        <div>
+          <p className="eyebrow uppercase text-xs font-semibold text-brand">Team</p>
+          <h2 className="text-lg font-bold text-ink">Active Income &amp; Hours <span className="text-xs font-normal text-muted">· this week</span></h2>
+        </div>
+        <div className="flex items-center gap-3">
+          <span className="text-xs text-muted">{onNow} on the clock · team {TC.money(teamComm)}</span>
+          <button onClick={toggleClock} disabled={busy}
+            className={"rounded-md px-3.5 py-1.5 text-xs font-bold border transition "+(meOpen?'bg-emerald-600 text-white border-emerald-600 hover:bg-emerald-500':'bg-ink text-white border-ink hover:opacity-90')}>
+            {meOpen?'● Clock Out':'Clock In'}
+          </button>
+        </div>
+      </div>
+      <div className="divide-y divide-line">
+        {rows.length===0 && <div className="text-sm text-muted py-2">Loading team…</div>}
+        {rows.map((r,i)=>{
+          const you=r.u.id===rep.id;
+          return (
+            <div key={r.u.id} className={"flex items-center gap-3 py-2.5 "+(you?'bg-brand/5 -mx-2 px-2 rounded-md':'')}>
+              <div className="w-5 text-center text-sm font-bold text-muted">{i+1}</div>
+              <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold flex-none" style={{background:TC.colorFor(r.u)}}>{TC.initials(r.u.full_name)}</div>
+              <div className="flex-1 min-w-0">
+                <div className="font-semibold text-ink text-sm truncate flex items-center gap-1.5">{r.u.full_name}{you&&<span className="text-muted font-normal">(you)</span>}{r.u.team&&<span className="text-[9px] uppercase tracking-wide font-bold text-muted bg-surface rounded px-1.5 py-0.5">{r.u.team}</span>}</div>
+                <div className="text-[11px] text-muted flex items-center gap-1.5">
+                  {r.open && <span className="relative flex h-2 w-2"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span><span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span></span>}
+                  {r.open?'On the clock · ':''}{TC.hm(r.hours)} this week
+                </div>
+              </div>
+              <div className="text-right flex-none">
+                <div className="text-base font-extrabold text-emerald-600 tabular-nums">{TC.money(r.comm)}</div>
+                <div className="text-[10px] uppercase tracking-wide text-muted">commission</div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/* ---------- Booking History (recently booked opportunities) ---------- */
+const channelLabel=k=>(CHANNELS.find(c=>c[0]===k)||[null,k||'—'])[1];
+const campaignLabel=k=>(CAMPAIGNS.find(c=>c[0]===k)||[null,k||'—'])[1];
+const fmtDateTime=iso=>{ if(!iso) return '—'; try{ return new Date(iso).toLocaleString('en-US',{month:'short',day:'numeric',year:'numeric',hour:'numeric',minute:'2-digit',timeZone:'America/Phoenix'});}catch(e){return iso;} };
+// Appointment day + time, with weekday — used on the booking-history cards.
+const fmtApptWhen=iso=>{ if(!iso) return null; try{ return new Date(iso).toLocaleString('en-US',{weekday:'short',month:'short',day:'numeric',year:'numeric',hour:'numeric',minute:'2-digit',timeZone:'America/Phoenix'});}catch(e){return iso;} };
+const isoToLocalInput=iso=>{ if(!iso) return ''; const d=new Date(iso); const p=n=>String(n).padStart(2,'0'); return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`; };
+const localInputToISO=v=>{ return v? new Date(v).toISOString() : null; };
+const STATUS_STYLE={booked:'bg-emerald-50 text-emerald-700 border-emerald-200', cancelled:'bg-red-50 text-red-700 border-red-200', failed:'bg-amber-50 text-amber-700 border-amber-200'};
+
+async function callOpp(rep, payload){
+  const r=await fetch(SUPA_URL+'/functions/v1/opportunities',{method:'POST',
+    headers:{'Content-Type':'application/json','Authorization':'Bearer '+SUPA_ANON},
+    body:JSON.stringify({actor_id:rep.id, pin:rep.pin, ...payload})});
+  const j=await r.json(); if(!r.ok) throw new Error(j.error||('HTTP '+r.status)); return j;
+}
+
+function OppHistory({rep, goBook, embed}){
+  const isAdmin = rep.role==='admin'||rep.role==='manager';
+  const [from,setFrom]=useState(()=>{const d=new Date();d.setDate(d.getDate()-30);return ymd(d);});
+  const [to,setTo]=useState(()=>ymd(new Date()));
+  const [rows,setRows]=useState([]); const [busy,setBusy]=useState(false); const [err,setErr]=useState('');
+  const [editId,setEditId]=useState(null);
+
+  async function load(){
+    setBusy(true); setErr('');
+    try{
+      const j=await callOpp(rep,{op:'list', date_from:from+'T00:00:00.000Z', date_to:to+'T23:59:59.999Z', limit:500});
+      setRows(j.opportunities||[]);
+    }catch(e){ setErr(String(e.message||e)); }
+    setBusy(false);
+  }
+  useEffect(()=>{ load(); },[]);
+
+  const totalOpps=rows.length;
+  const totalItems=rows.reduce((a,o)=>a+(o.items?.length||0),0);
+  const totalContract=rows.reduce((a,o)=>a+(o.items||[]).reduce((b,it)=>b+Number(it.contract_value||0),0),0);
+
+  return (
+    <div className="pt-10">
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div>
+          <p className="eyebrow uppercase text-xs font-semibold text-brand mb-2">Growth Team</p>
+          <h1 className="text-4xl font-bold text-ink mb-1">Booking History</h1>
+          <p className="text-body">Recently booked opportunities across the Advosy family.</p>
+        </div>
+        {!embed && <button onClick={goBook} className={btnGhost}>← Back to booking</button>}
+      </div>
+
+      {/* filter bar */}
+      <div className="bg-white rounded-xl border border-line p-4 mt-6 flex flex-wrap items-end gap-3">
+        <div><label className={fld}>From</label><input type="date" className={inp} value={from} onChange={e=>setFrom(e.target.value)}/></div>
+        <div><label className={fld}>To</label><input type="date" className={inp} value={to} onChange={e=>setTo(e.target.value)}/></div>
+        <button className={btn} onClick={load} disabled={busy}>{busy?'Loading…':'Apply'}</button>
+        <div className="flex gap-2 ml-auto text-xs">
+          {[['7d',7],['30d',30],['90d',90]].map(([l,n])=>(
+            <button key={l} onClick={()=>{const d=new Date();d.setDate(d.getDate()-n);setFrom(ymd(d));setTo(ymd(new Date()));}}
+              className="rounded-md border border-line px-3 py-1.5 font-semibold text-body hover:border-brand">{l}</button>
+          ))}
+        </div>
+      </div>
+
+      <div className="flex flex-wrap gap-4 mt-4 text-sm">
+        <span className="text-muted">Opportunities: <b className="text-ink">{totalOpps}</b></span>
+        <span className="text-muted">Line items: <b className="text-ink">{totalItems}</b></span>
+        <span className="text-muted">Contract value: <b className="text-emerald-600">{TC.money(totalContract)}</b></span>
+      </div>
+
+      {err && <div className="text-sm text-danger bg-red-50 border border-red-200 rounded-md px-3 py-2 mt-4">{err}</div>}
+
+      <div className="mt-4 space-y-4">
+        {!busy && rows.length===0 && <div className="text-center text-muted text-sm border border-dashed border-line rounded-lg py-10">No opportunities in this date range.</div>}
+        {rows.map(o=> editId===o.session_id
+          ? <OppEditor key={o.session_id} opp={o} rep={rep} onClose={()=>setEditId(null)} onSaved={()=>{setEditId(null);load();}}/>
+          : <OppCard key={o.session_id} opp={o} isAdmin={isAdmin} onEdit={()=>setEditId(o.session_id)} rep={rep} onChanged={load}/>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function OppCard({opp,isAdmin,onEdit,rep,onChanged}){
+  const c=opp.customer||{};
+  const ch=opp.channel==='other'?(opp.channel_other||'Other'):channelLabel(opp.channel);
+  const cm=opp.campaign==='other'?(opp.campaign_other||'Other'):campaignLabel(opp.campaign);
+  const allCancelled=(opp.items||[]).length>0 && (opp.items||[]).every(i=>i.status==='cancelled');
+  async function cancelOpp(){
+    const reason=window.prompt('Cancel this entire opportunity? Optionally add a reason:','');
+    if(reason===null) return;
+    try{ const j=await callOpp(rep,{op:'cancel', session_id:opp.session_id, reason:reason||null});
+      if(j.warnings&&j.warnings.length) alert(j.warnings.join('\n'));
+      onChanged();
+    }catch(e){ alert('Could not cancel: '+(e.message||e)); }
+  }
+  return (
+    <div className={"bg-white rounded-xl border p-5 "+(allCancelled?'border-red-200 opacity-80':'border-line')}>
+      <div className="flex items-start justify-between gap-4 flex-wrap">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <h3 className="text-lg font-bold text-ink">{c.name||'(no name)'}</h3>
+            {opp.emergency && <span className="px-2 py-0.5 rounded bg-red-600 text-white text-[10px] font-bold uppercase tracking-wide">⚡ Emergency</span>}
+            {allCancelled && <span className="px-2 py-0.5 rounded bg-red-100 text-red-700 text-[10px] font-bold uppercase tracking-wide">Cancelled</span>}
+          </div>
+          <div className="text-xs text-muted mt-0.5">{[c.phone,c.email].filter(Boolean).join(' · ')||'—'}</div>
+          {c.address && <div className="text-xs text-muted">{c.address}</div>}
+        </div>
+        <div className="text-right text-xs text-muted">
+          <div>Booked {fmtDateTime(opp.created_at)}</div>
+          <div>Setter: <b className="text-ink">{opp.rep_name||'—'}</b> · {opp.source}</div>
+        </div>
+      </div>
+
+      <div className="flex flex-wrap gap-x-5 gap-y-1 mt-3 text-xs text-muted border-t border-line pt-3">
+        <span>Channel: <b className="text-ink">{ch}</b></span>
+        <span>Campaign: <b className="text-ink">{cm}</b></span>
+        {opp.gate_code && <span>Gate: <b className="text-ink tracking-widest">{opp.gate_code}</b></span>}
+      </div>
+      {opp.notes && <div className="text-xs text-body mt-2 bg-surface rounded-md px-3 py-2 whitespace-pre-wrap">{opp.notes}</div>}
+
+      <div className="mt-3 space-y-2">
+        {(opp.items||[]).map(it=>{
+          const svc=byKey(it.service_type)||{label:it.service_type};
+          const sold=it.appointment_type==='sold_customer';
+          return (
+            <div key={it.id} className="flex items-center justify-between gap-3 bg-surface rounded-lg px-3 py-2 flex-wrap">
+              <div className="min-w-0">
+                <div className="font-semibold text-ink text-sm flex items-center gap-2 flex-wrap">
+                  {svc.label} — {APPT[it.appointment_type]||it.appointment_type}
+                  <span className={"px-1.5 py-0.5 rounded border text-[10px] font-bold uppercase tracking-wide "+(STATUS_STYLE[it.status]||'bg-surface text-muted border-line')}>{it.status}</span>
+                </div>
+                <div className="text-[11px] text-muted mt-0.5">
+                  {sold
+                    ? <>Sold on phone · {it.sale_type||'—'} · <b className="text-emerald-600">{TC.money(it.contract_value)}</b></>
+                    : <>{it.slot_start?<b className="text-ink">📅 {fmtApptWhen(it.slot_start)}</b>:<span className="text-amber-600">No appointment time set</span>}{it.assigned_rep?(' · '+it.assigned_rep):''}</>}
+                  {it.provider_ref && <span className="font-mono"> · {it.provider_ref}</span>}
+                  {it.cancel_reason && <span className="text-red-600"> · {it.cancel_reason}</span>}
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {isAdmin && (
+        <div className="flex items-center gap-2 mt-4">
+          <button onClick={onEdit} className="rounded-md border border-line px-3 py-1.5 text-xs font-semibold text-body hover:border-brand">✎ Edit</button>
+          {!allCancelled && <button onClick={cancelOpp} className="rounded-md border border-red-200 text-danger px-3 py-1.5 text-xs font-semibold hover:bg-red-50">Cancel opportunity</button>}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function OppEditor({opp,rep,onClose,onSaved}){
+  const c=opp.customer||{};
+  const [name,setName]=useState(c.name||''); const [phone,setPhone]=useState(c.phone||'');
+  const [email,setEmail]=useState(c.email||''); const [address,setAddress]=useState(c.address||'');
+  const [source,setSource]=useState(opp.source||'inbound');
+  const [channel,setChannel]=useState(opp.channel||''); const [channelOther,setChannelOther]=useState(opp.channel_other||'');
+  const [campaign,setCampaign]=useState(opp.campaign||''); const [campaignOther,setCampaignOther]=useState(opp.campaign_other||'');
+  const [emergency,setEmergency]=useState(!!opp.emergency); const [gateCode,setGateCode]=useState(opp.gate_code||'');
+  const [notes,setNotes]=useState(opp.notes||'');
+  const [items,setItems]=useState(()=>(opp.items||[]).map(it=>({...it,
+    _start:isoToLocalInput(it.slot_start), _contract:it.contract_value??'', _status:it.status, _appt:it.appointment_type, _sale:it.sale_type||''})));
+  const [busy,setBusy]=useState(false); const [msg,setMsg]=useState('');
+
+  function setItem(id,patch){ setItems(its=>its.map(x=>x.id===id?{...x,...patch}:x)); }
+
+  async function save(){
+    setBusy(true); setMsg('Saving…'); const warns=[];
+    try{
+      await callOpp(rep,{op:'update_session', session_id:opp.session_id, patch:{
+        source, channel, channel_other:channel==='other'?channelOther:null, campaign, campaign_other:campaign==='other'?campaignOther:null,
+        emergency, gate_code:gateCode||null, notes:notes||null,
+        customer:{name,phone,email,address}
+      }});
+      for(const it of items){
+        const patch={};
+        if(it._appt!==it.appointment_type) patch.appointment_type=it._appt;
+        if(it._status!==it.status) patch.status=it._status;
+        const newStart=localInputToISO(it._start);
+        if(newStart && newStart!==it.slot_start){ patch.slot_start=newStart;
+          const durMs = (it.slot_start&&it.slot_end)?(new Date(it.slot_end)-new Date(it.slot_start)):3600000;
+          patch.slot_end=new Date(new Date(newStart).getTime()+durMs).toISOString(); }
+        if(String(it._contract)!==String(it.contract_value??'')) patch.contract_value=it._contract===''?null:Number(it._contract);
+        if(it._sale!==(it.sale_type||'')) patch.sale_type=it._sale||null;
+        if(Object.keys(patch).length){
+          const j=await callOpp(rep,{op:'update_item', item_id:it.id, patch});
+          if(j.warnings&&j.warnings.length) warns.push(...j.warnings);
+        }
+      }
+      if(warns.length) alert(warns.join('\n'));
+      onSaved();
+    }catch(e){ setMsg('Error: '+(e.message||e)); setBusy(false); }
+  }
+
+  return (
+    <div className="bg-white rounded-xl border-2 border-brand p-5">
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="text-lg font-bold text-ink">Edit opportunity</h3>
+        <button onClick={onClose} className="text-muted hover:text-ink text-xl leading-none">×</button>
+      </div>
+      <div className="grid md:grid-cols-2 gap-3">
+        <div><label className={fld}>Name</label><input className={inp} value={name} onChange={e=>setName(e.target.value)}/></div>
+        <div><label className={fld}>Phone</label><input className={inp} value={phone} onChange={e=>setPhone(e.target.value)}/></div>
+        <div><label className={fld}>Email</label><input className={inp} value={email} onChange={e=>setEmail(e.target.value)}/></div>
+        <div><label className={fld}>Address</label><input className={inp} value={address} onChange={e=>setAddress(e.target.value)}/></div>
+      </div>
+      <div className="grid md:grid-cols-3 gap-3 mt-3">
+        <div>
+          <label className={fld}>Source</label>
+          <select className={inp} value={source} onChange={e=>setSource(e.target.value)}>
+            <option value="inbound">Inbound</option><option value="outbound">Outbound</option>
+          </select>
+        </div>
+        <div>
+          <label className={fld}>Channel</label>
+          <select className={inp} value={channel} onChange={e=>setChannel(e.target.value)}>
+            <option value="">—</option>{CHANNELS.map(([v,l])=><option key={v} value={v}>{l}</option>)}
+          </select>
+          {channel==='other' && <input className={inp+" mt-2"} placeholder="Specify…" value={channelOther} onChange={e=>setChannelOther(e.target.value)}/>}
+        </div>
+        <div>
+          <label className={fld}>Campaign</label>
+          <select className={inp} value={campaign} onChange={e=>setCampaign(e.target.value)}>
+            <option value="">—</option>{CAMPAIGNS.map(([v,l])=><option key={v} value={v}>{l}</option>)}
+          </select>
+          {campaign==='other' && <input className={inp+" mt-2"} placeholder="Specify…" value={campaignOther} onChange={e=>setCampaignOther(e.target.value)}/>}
+        </div>
+      </div>
+      <div className="grid md:grid-cols-2 gap-3 mt-3">
+        <div><label className={fld}>Gate code</label><input className={inp+" max-w-[160px] tracking-widest"} value={gateCode} onChange={e=>setGateCode(e.target.value)}/></div>
+        <div>
+          <label className={fld}>Emergency</label>
+          <div className="flex gap-2">
+            <button onClick={()=>setEmergency(false)} className={"px-4 py-2 text-sm rounded-md border "+(!emergency?'bg-ink text-white border-ink':'bg-white text-muted border-line')}>No</button>
+            <button onClick={()=>setEmergency(true)} className={"px-4 py-2 text-sm rounded-md border "+(emergency?'bg-red-600 text-white border-red-600':'bg-white text-muted border-line')}>⚡ Yes</button>
+          </div>
+        </div>
+      </div>
+      <div className="mt-3"><label className={fld}>Lead notes</label><textarea className={inp+" h-20 resize-y"} value={notes} onChange={e=>setNotes(e.target.value)}/></div>
+
+      <div className="mt-4 border-t border-line pt-3">
+        <div className="text-xs font-semibold text-muted uppercase tracking-wide mb-2">Line items</div>
+        <div className="space-y-3">
+          {items.map(it=>{
+            const svc=byKey(it.service_type)||{label:it.service_type,types:[]};
+            const sold=it._appt==='sold_customer';
+            return (
+              <div key={it.id} className="rounded-lg border border-line p-3">
+                <div className="text-sm font-semibold text-ink mb-2">{svc.label}</div>
+                <div className="grid md:grid-cols-3 gap-3">
+                  <div>
+                    <label className={fld}>Appointment type</label>
+                    <select className={inp} value={it._appt} onChange={e=>setItem(it.id,{_appt:e.target.value})}>
+                      {(svc.types||[it._appt]).map(t=><option key={t} value={t}>{APPT[t]||t}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className={fld}>Status</label>
+                    <select className={inp} value={it._status} onChange={e=>setItem(it.id,{_status:e.target.value})}>
+                      <option value="booked">Active (booked)</option>
+                      <option value="cancelled">Cancelled</option>
+                      <option value="failed">Failed</option>
+                    </select>
+                  </div>
+                  {sold ? (
+                    <div>
+                      <label className={fld}>Contract value</label>
+                      <input className={inp} type="number" min="0" step="0.01" value={it._contract} onChange={e=>setItem(it.id,{_contract:e.target.value})}/>
+                    </div>
+                  ) : (
+                    <div>
+                      <label className={fld}>Appointment date/time</label>
+                      <input className={inp} type="datetime-local" value={it._start} onChange={e=>setItem(it.id,{_start:e.target.value})}/>
+                    </div>
+                  )}
+                </div>
+                {sold && (
+                  <div className="mt-2">
+                    <label className={fld}>What was sold <span className="text-muted font-normal normal-case">(comma-separated)</span></label>
+                    <input className={inp} value={it._sale} onChange={e=>setItem(it.id,{_sale:e.target.value})} placeholder="e.g. Pest Membership, Termite Treatment" />
+                  </div>
+                )}
+                {it.provider==='ghl' && <div className="text-[11px] text-muted mt-1">Changes to date or status sync to GoHighLevel automatically.</div>}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="flex items-center gap-2 mt-4">
+        <button className={btn} disabled={busy} onClick={save}>{busy?'Saving…':'Save changes'}</button>
+        <button className={btnGhost} onClick={onClose}>Cancel</button>
+        {msg && <span className="text-xs text-muted">{msg}</span>}
+      </div>
+    </div>
+  );
+}
+
+/* ---------- Advosy Offers (collapsible left column on Book Now) ---------- */
+const ADVOSY_OFFERS = [
+  {
+    id: 'home-care',
+    name: 'Advosy Home Care Membership',
+    price: '$9.99',
+    cadence: '/mo',
+    badge: 'Rep can comp',
+    tagline: 'Year-round maintenance on every major system — all handled by the Advosy family.',
+    oneLiner: 'A home-care membership for just $9.99/month that covers maintenance inspections and tune-ups on every major system in your home — all handled by the Advosy family of companies (Everest, Pestkee, VRZA).',
+    valueStack: [
+      { service: '2 HVAC tune-ups', provider: 'Everest', value: '$158' },
+      { service: '1 water heater flush', provider: 'Everest', value: '$125' },
+      { service: '1 home mold inspection', provider: '—', value: '$199' },
+      { service: '1 roof inspection', provider: 'VRZA', value: '$199' },
+      { service: '1 attic insulation inspection', provider: '—', value: 'TBD' },
+      { service: '1 termite inspection', provider: 'Pestkee', value: '$150' },
+    ],
+    valueTotal: '≈ $830+ / year',
+    priceNote: '$9.99/mo (~$120/yr) for $830+/yr in maintenance value.',
+    discretion: 'Reps can comp it to free when it helps close the appointment, retain an on-the-fence customer, or reward a high-value booking. Free is a tool, not the default — lead with $9.99 and only drop it when it moves the deal.',
+    why: 'Even at $9.99, the real value is recurring access to the home — every visit is a no-pressure chance to win repair/replace/service work across all brands, plus it boosts retention and lifetime value. The $9.99 covers overhead; the relationship is the return. The goal is enrollment, not a hard sale.',
+    timing: 'Offer it right after the customer has committed to their appointment — the moment of peak goodwill. Never lead with it; it’s a bonus, not the pitch.',
+    timingScript: '“Since you’re booking with us, I can also get you enrolled in our Advosy Home Care Membership. Can I tell you what that includes?”',
+    talkTrack: [
+      { step: 'Anchor value first', line: '“It’s over $800 a year in maintenance…”' },
+      { step: 'Reveal the price', line: '“…and it’s just $9.99 a month.”' },
+      { step: 'Stack the services', line: 'HVAC ×2, water heater, roof, mold, insulation, termite.' },
+      { step: 'Kill friction', line: '“No contract, and you’re never obligated to buy anything from the inspections.”' },
+      { step: 'Assume the close', line: '“I’ll add you at $9.99 — just need to confirm your info.”' },
+      { step: 'Comp lever (if they hesitate on price)', line: '“You know what — since you’re booking with us today, let me just include it for free.”' },
+    ],
+    objections: [
+      { o: '“I don’t want another monthly bill.”', a: 'Totally fair. Honestly, since you’re already booking with us, let me just waive it and include it free. (rep discretion)' },
+      { o: '“Is it worth $9.99?”', a: 'It’s over $800 a year in maintenance for about the price of one coffee a month — and if anything’s ever wrong, you find out early instead of in an emergency.' },
+      { o: '“What’s the catch?”', a: 'No catch. We’d rather be the company already in your home keeping things running than a stranger you call in an emergency. If we ever find something, we give you an honest quote — but you’re never obligated.' },
+      { o: '“Do I have to buy anything?”', a: 'Never. If everything’s healthy, we tell you it’s healthy and move on.' },
+      { o: '“I don’t have time for all that.”', a: 'Totally get it — we schedule each visit around you throughout the year, and most take under an hour. You’re just locking in the option now.' },
+    ],
+    enroll: ['Get a verbal yes', 'Enroll in the Advosy app ($9.99/mo or comped)', 'Membership visits triggered across the year', 'Each visit routed to the right brand'],
+  },
+];
+
+function OfferDetail({ offer, onCollapse }){
+  return (
+    <div className="pb-4">
+      <div className="flex items-center justify-between mb-3 sticky top-0 bg-surface/95 backdrop-blur py-2 z-10">
+        <p className="eyebrow uppercase text-xs font-semibold text-brand">Advosy Offer</p>
+        <button onClick={onCollapse} className={btnGhost+" !px-3 !py-1.5 !text-xs"}>« Collapse</button>
+      </div>
+
+      <div className="bg-ink rounded-xl p-6 text-zinc-200">
+        <div className="flex items-start justify-between gap-3">
+          <h2 className="text-2xl font-bold text-white leading-tight">{offer.name}</h2>
+          <span className="shrink-0 text-[10px] font-bold uppercase tracking-wide text-emerald-300 bg-emerald-900/40 rounded px-2 py-1">{offer.badge}</span>
+        </div>
+        <div className="mt-3 flex items-baseline gap-1.5 flex-wrap">
+          <span className="text-4xl font-extrabold text-white">{offer.price}</span>
+          <span className="text-zinc-400">{offer.cadence}</span>
+          <span className="ml-2 text-sm text-emerald-300 font-semibold">{offer.valueTotal} in value</span>
+        </div>
+        <p className="text-sm text-zinc-300 mt-3 leading-relaxed">{offer.oneLiner}</p>
+      </div>
+
+      <div className="bg-white rounded-xl border border-line p-5 mt-4">
+        <p className="eyebrow uppercase text-xs font-semibold text-brand mb-3">What’s included — every year</p>
+        <table className="w-full text-sm">
+          <thead><tr className="text-left text-[10px] uppercase tracking-wide text-muted border-b border-line"><th className="py-1.5">Service</th><th>Provider</th><th className="text-right">Value</th></tr></thead>
+          <tbody>
+            {offer.valueStack.map((r,i)=>(
+              <tr key={i} className="border-b border-line/60">
+                <td className="py-2 text-ink font-medium">{r.service}</td>
+                <td className="text-muted">{r.provider}</td>
+                <td className="text-right font-semibold text-emerald-600 tabular-nums">{r.value}</td>
+              </tr>
+            ))}
+          </tbody>
+          <tfoot><tr className="font-bold text-ink"><td className="py-2.5" colSpan={2}>Total value</td><td className="text-right text-emerald-600">{offer.valueTotal}</td></tr></tfoot>
+        </table>
+      </div>
+
+      <div className="bg-white rounded-xl border border-line p-5 mt-4 space-y-3">
+        <div>
+          <p className="eyebrow uppercase text-xs font-semibold text-brand mb-1">Pricing &amp; rep discretion</p>
+          <p className="text-sm text-body">{offer.priceNote}</p>
+        </div>
+        <div className="rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 text-sm text-amber-900"><b>Comp lever:</b> {offer.discretion}</div>
+        <p className="text-xs text-muted leading-relaxed"><b className="text-body">Why it works:</b> {offer.why}</p>
+      </div>
+
+      <div className="bg-white rounded-xl border border-line p-5 mt-4">
+        <p className="eyebrow uppercase text-xs font-semibold text-brand mb-1">When to offer it</p>
+        <p className="text-sm text-body">{offer.timing}</p>
+        <p className="mt-2 text-sm italic text-ink bg-surface rounded-md px-3 py-2">{offer.timingScript}</p>
+      </div>
+
+      <div className="bg-white rounded-xl border border-line p-5 mt-4">
+        <p className="eyebrow uppercase text-xs font-semibold text-brand mb-3">Talk track</p>
+        <ol className="space-y-2.5">
+          {offer.talkTrack.map((t,i)=>(
+            <li key={i} className="flex gap-3">
+              <span className="w-5 h-5 mt-0.5 shrink-0 rounded-full bg-ink text-white text-[11px] font-bold flex items-center justify-center">{i+1}</span>
+              <div><div className="text-[11px] font-bold uppercase tracking-wide text-muted">{t.step}</div><div className="text-sm text-ink">{t.line}</div></div>
+            </li>
+          ))}
+        </ol>
+      </div>
+
+      <div className="bg-white rounded-xl border border-line p-5 mt-4">
+        <p className="eyebrow uppercase text-xs font-semibold text-brand mb-3">Objection handling</p>
+        <div className="space-y-3">
+          {offer.objections.map((x,i)=>(
+            <div key={i}>
+              <div className="text-sm font-semibold text-ink">{x.o}</div>
+              <div className="text-sm text-body mt-0.5 pl-3 border-l-2 border-brand/30">{x.a}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="bg-white rounded-xl border border-line p-5 mt-4">
+        <p className="eyebrow uppercase text-xs font-semibold text-brand mb-3">How to enroll</p>
+        <div className="flex flex-wrap items-center gap-2 text-sm">
+          {offer.enroll.map((s,i)=>(
+            <React.Fragment key={i}>
+              <span className="rounded-md bg-surface px-2.5 py-1 text-ink font-medium">{s}</span>
+              {i<offer.enroll.length-1 && <span className="text-muted">→</span>}
+            </React.Fragment>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function OffersPanel({ open, setOpen, expanded, setExpanded }){
+  const offer = ADVOSY_OFFERS.find(o=>o.id===expanded) || null;
+  // Width mode: expanded offer (left half) > open list (fixed column) > collapsed rail.
+  const widthClass = offer ? 'lg:w-1/2' : (open ? 'lg:w-[320px]' : 'lg:w-12');
+  return (
+    <div className={"w-full shrink-0 mb-6 lg:mb-0 transition-all duration-500 ease-in-out "+widthClass}>
+      <div className="lg:sticky lg:top-20 lg:max-h-[calc(100vh-6rem)] lg:overflow-y-auto">
+
+        {/* Collapsed rail */}
+        {!open && !offer && (
+          <button onClick={()=>setOpen(true)} title="Show Advosy Offers"
+            className="w-full lg:h-auto lg:min-h-[240px] flex lg:flex-col items-center justify-center gap-2 rounded-xl bg-ink text-white hover:bg-zinc-800 transition py-3 lg:py-5">
+            <span className="text-lg">🎁</span>
+            <span className="hidden lg:inline text-[11px] font-bold uppercase tracking-[0.2em] text-zinc-200" style={{writingMode:'vertical-rl'}}>Advosy Offers</span>
+            <span className="lg:hidden text-sm font-bold uppercase tracking-wide">Advosy Offers</span>
+          </button>
+        )}
+
+        {/* Open list */}
+        {open && !offer && (
+          <div>
+            <div className="flex items-center justify-between mb-3">
+              <p className="eyebrow uppercase text-xs font-semibold text-brand">Advosy Offers</p>
+              <button onClick={()=>setOpen(false)} title="Collapse offers" className="text-muted hover:text-ink text-lg leading-none px-1.5 rounded hover:bg-surface">«</button>
+            </div>
+            <div className="space-y-3">
+              {ADVOSY_OFFERS.map(o=>(
+                <button key={o.id} onClick={()=>setExpanded(o.id)}
+                  className="w-full text-left bg-white rounded-xl border border-line p-4 hover:border-brand hover:shadow-sm transition group">
+                  <div className="flex items-start justify-between gap-2">
+                    <h3 className="font-bold text-ink text-sm leading-snug">{o.name}</h3>
+                    <span className="shrink-0 text-[10px] font-bold uppercase tracking-wide text-brand bg-brand/10 rounded px-1.5 py-0.5">{o.badge}</span>
+                  </div>
+                  <div className="mt-2 flex items-baseline gap-1">
+                    <span className="text-2xl font-extrabold text-ink">{o.price}</span>
+                    <span className="text-xs text-muted">{o.cadence}</span>
+                  </div>
+                  <p className="text-xs text-body mt-1.5 leading-relaxed">{o.tagline}</p>
+                  <div className="mt-3 flex items-center gap-1 text-xs font-semibold text-brand group-hover:gap-2 transition-all">Present offer <span>→</span></div>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Expanded detail */}
+        {offer && <OfferDetail offer={offer} onCollapse={()=>setExpanded(null)} />}
+      </div>
+    </div>
+  );
+}
+
+function App(){
+  const [rep,setRep]=useState(()=>{try{return JSON.parse(localStorage.getItem('advosy_rep'))}catch(e){return null}});
+  useEffect(()=>{ const el=document.getElementById('hdr-rep'); if(el) el.textContent = rep?('Rep: '+rep.full_name):'Not signed in'; },[rep]);
+  function authRep(r){ try{localStorage.setItem('advosy_rep',JSON.stringify(r))}catch(e){}; setRep(r); }
+  function logout(){ try{localStorage.removeItem('advosy_rep')}catch(e){}; setRep(null); }
+  const [cust,setCust]=useState({name:'',phone:'',email:'',address:''});
+  const [emailDeclined,setEmailDeclined]=useState(false);
+  const [manualAddr,setManualAddr]=useState(false);
+  function setManualField(k,v){
+    setCust(c=>{
+      const addr={street:'',city:'',state:'',zip:'', ...(c.addr||{}), [k]:v};
+      const formatted=[addr.street, addr.city, [addr.state,addr.zip].filter(Boolean).join(' ')].filter(Boolean).join(', ');
+      return {...c, addr, address:formatted};
+    });
+  }
+  const [source,setSource]=useState('inbound');
+  useEffect(()=>{ if(rep) setSource(rep.team==='outbound'?'outbound':'inbound'); },[rep]);
+  const [channel,setChannel]=useState(''); const [channelOther,setChannelOther]=useState('');
+  const [campaign,setCampaign]=useState(''); const [campaignOther,setCampaignOther]=useState('');
+  const [gateCode,setGateCode]=useState(''); const [emergency,setEmergency]=useState(false); const [leadNotes,setLeadNotes]=useState('');
+  // EMBED = running inside the unified dashboard shell (tabs + sign-out live in the shell).
+  const EMBED = new URLSearchParams(window.location.search).has('embed');
+  const [view,setView]=useState(()=> (window.location.hash==='#history'?'history':'book')); // 'book' | 'history'
+  useEffect(()=>{ // when embedded, the shell drives book/history via postMessage (+ hash fallback)
+    function onHash(){ setView(window.location.hash==='#history'?'history':'book'); }
+    function onMsg(e){ const d=e&&e.data; if(d&&d.type==='advosy-view'){ setView(d.view==='history'?'history':'book'); } }
+    window.addEventListener('hashchange', onHash);
+    window.addEventListener('message', onMsg);
+    try{ if(window.parent && window.parent!==window) window.parent.postMessage({type:'advosy-ready'},'*'); }catch(e){}
+    return ()=>{ window.removeEventListener('hashchange', onHash); window.removeEventListener('message', onMsg); };
+  },[]);
+  const [pick,setPick]=useState(null);
+  const [apptType,setApptType]=useState('');
+  const [jobType,setJobType]=useState(null); // ServiceTitan specific job type {label, jt, bu}
+  const [contractValue,setContractValue]=useState('');
+  const [sellWhat,setSellWhat]=useState([]); // multi-select: array of SALE_OPTIONS
+  const [sellOther,setSellOther]=useState('');
+  const [loading,setLoading]=useState(false);
+  const [slots,setSlots]=useState([]);
+  const [chosenSlot,setChosenSlot]=useState(null);
+  const [driveAware,setDriveAware]=useState(true);
+  const [availErr,setAvailErr]=useState('');
+  const [selDate,setSelDate]=useState('');
+  const [calMonth,setCalMonth]=useState(null); // Date = first of displayed month
+  const [cart,setCart]=useState([]);
+  const [done,setDone]=useState(null);
+  const [booking,setBooking]=useState(false);
+  const [offersOpen,setOffersOpen]=useState(false);  // Advosy Offers column open vs collapsed rail (collapsed by default)
+  const [offerExpanded,setOfferExpanded]=useState(null); // offer id when expanded to half screen
+
+  if(!rep) return <Login onAuth={authRep}/>;
+
+  function chooseService(key){ setPick(key); setApptType(''); setJobType(null); setSlots([]); setChosenSlot(null); setSelDate(''); setCalMonth(null); setContractValue(''); setSellWhat([]); setSellOther(''); }
+  async function loadSlots(opts){
+    setLoading(true);
+    try {
+      const got = await getAvailability(pick, opts);
+      setSlots(got);
+      const first = got.map(s=>s.dateKey).sort()[0] || '';
+      setSelDate(first);
+      setCalMonth(first ? new Date(first+'T12:00:00') : new Date());
+    }
+    catch(e){ setAvailErr(String((e&&e.message)||e)); }
+    finally { setLoading(false); }
+  }
+  async function chooseType(t){
+    // "New Sold Customer" skips the calendar — it's a phone sale, not an appointment.
+    if(t==='sold_customer'){ setApptType(t); setJobType(null); setChosenSlot(null); setSlots([]); setSelDate(''); setCalMonth(null); setAvailErr(''); setContractValue(''); setSellWhat([]); setSellOther(''); return; }
+    setApptType(t); setJobType(null); setChosenSlot(null); setSlots([]); setSelDate(''); setCalMonth(null); setAvailErr('');
+    // ServiceTitan lines wait for a specific job type before pulling availability.
+    if(byKey(pick).provider==='servicetitan') return;
+    loadSlots();
+  }
+  async function chooseJobType(jt){
+    setJobType(jt); setChosenSlot(null); setSlots([]); setSelDate(''); setCalMonth(null); setAvailErr('');
+    loadSlots({jobTypeId:jt.jt, buId:jt.bu});
+  }
+  function shiftDay(delta){
+    if(!selDate) return;
+    const keys=[...new Set(slots.map(s=>s.dateKey))].sort();
+    const min=keys[0], max=keys[keys.length-1];
+    const d=new Date(selDate+'T12:00:00'); d.setDate(d.getDate()+delta);
+    const key=ymd(d);
+    if(key<min||key>max) return;
+    setSelDate(key); setChosenSlot(null);
+    setCalMonth(new Date(d.getFullYear(), d.getMonth(), 1));
+  }
+  function buildItem(){
+    const svc=byKey(pick);
+    if(apptType==='sold_customer'){
+      // multi-select: join chosen categories; replace "Other" with the typed text
+      const sale = sellWhat.map(o=>o==='Other'?(sellOther.trim()||'Other'):o).join(', ');
+      return {uid:Date.now()+Math.random(), service:pick, label:svc.label, brand:svc.brand, provider:svc.provider, appointment_type:apptType, is_upsell:false,
+        contract_value: Number(contractValue)||0, sale_type: sale, sale_type_other: sellWhat.includes('Other')?(sellOther.trim()||null):null,
+        slot:{day:'Sold on phone', time:sale, who:rep.full_name}};
+    }
+    return {uid:Date.now()+Math.random(), service:pick, label:svc.label, brand:svc.brand, provider:svc.provider, appointment_type:apptType, slot:chosenSlot, is_upsell:false,
+      st_job_type_id: jobType?jobType.jt:null, st_business_unit_id: jobType?jobType.bu:null, job_type_label: jobType?jobType.label:null};
+  }
+  function addToCart(){ setCart(c=>[...c,buildItem()]); setPick(null); setApptType(''); setJobType(null); setSlots([]); setChosenSlot(null); setSelDate(''); setCalMonth(null); setContractValue(''); setSellWhat([]); setSellOther(''); }
+  function addAddonFlow(key){ if(chosenSlot||apptType==='sold_customer') setCart(c=>[...c,buildItem()]); chooseService(key); window.scrollTo({top:document.body.scrollHeight,behavior:'smooth'}); }
+  function removeItem(uid){ setCart(c=>c.filter(i=>i.uid!==uid)); }
+
+  // Email must be a valid format unless the rep explicitly marks it declined.
+  // A blank/invalid email breaks GHL contact creation, so we validate here too.
+  const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test((cust.email||'').trim());
+  const custOk = cust.name.trim() && cust.phone.trim() && (emailValid || emailDeclined);
+  const leadOk = channel && (channel!=='other'||channelOther.trim()) && campaign && (campaign!=='other'||campaignOther.trim());
+  const canBook = custOk && leadOk && cart.length>0;
+
+  async function bookAll(){
+    if(booking) return; setBooking(true);
+    const byUid={};
+    // Live lines: GHL appts (Roofing/Restoration), ServiceTitan appts (HVAC/Plumbing), Pestkee phone sales.
+    // FieldRoutes (Pest scheduled appts) stay simulated until wired.
+    const isLive=i=>i.provider==='ghl'||i.provider==='servicetitan'||i.appointment_type==='sold_customer';
+    cart.filter(i=>!isLive(i)).forEach(it=>{ byUid[it.uid]={...it, ...createBooking(it), live:false}; });
+    const live=cart.filter(isLive);
+    if(live.length){
+      try{
+        const payload={
+          session:{ rep_id:rep.id, pin:rep.pin, setter:rep.full_name, source, channel, channel_other:channel==='other'?channelOther:null,
+                    campaign, campaign_other:campaign==='other'?campaignOther:null,
+                    notes:leadNotes||null, gate_code:gateCode||null, emergency,
+                    customer:{name:cust.name,phone:cust.phone,email:cust.email,address:cust.address,
+                              street:cust.addr?cust.addr.street:undefined, city:cust.addr?cust.addr.city:undefined, state:cust.addr?cust.addr.state:undefined, zip:cust.addr?cust.addr.zip:undefined} },
+          items: live.map(it=>({ service_type:it.service, appointment_type:it.appointment_type,
+                    slot: it.appointment_type==='sold_customer' ? null : {start:it.slot.slotStart||it.slot.start, end:it.slot.slotEnd||it.slot.end},
+                    st_job_type_id:it.st_job_type_id||null, st_business_unit_id:it.st_business_unit_id||null,
+                    contract_value:it.contract_value, sale_type:it.sale_type, sale_type_other:it.sale_type_other, is_upsell:it.is_upsell }))
+        };
+        const r=await fetch(`${SUPA_URL}/functions/v1/book`,{method:'POST',
+          headers:{'Content-Type':'application/json','Authorization':'Bearer '+SUPA_ANON},body:JSON.stringify(payload)});
+        const j=await r.json(); if(!r.ok) throw new Error(j.error||('HTTP '+r.status));
+        live.forEach((it,idx)=>{ const res=(j.items&&j.items[idx])||{};
+          byUid[it.uid]={...it, provider_ref:res.provider_ref||(it.appointment_type==='sold_customer'?'SALE-'+(j.session_id||'').slice(0,8):'—'), assigned_rep:res.assigned_rep||it.slot.who||'Round-robin',
+            status:res.status||'failed', error:res.error_detail, live:true}; });
+      }catch(e){ live.forEach(it=>{ byUid[it.uid]={...it, status:'failed', error:e.message, live:true}; }); }
+    }
+    setDone(cart.map(c=>byUid[c.uid]));
+    setBooking(false);
+    window.scrollTo({top:0,behavior:'smooth'});
+  }
+  function reset(){ setCart([]); setDone(null); setCust({name:'',phone:'',email:'',address:''}); setEmailDeclined(false); setManualAddr(false); setChannel(''); setCampaign(''); setChannelOther(''); setCampaignOther(''); setGateCode(''); setEmergency(false); setLeadNotes(''); }
+
+  const chLabel=k=>(CHANNELS.find(c=>c[0]===k)||[])[1];
+  const cmpLabel=k=>(CAMPAIGNS.find(c=>c[0]===k)||[])[1];
+
+  /* ---------- booking history ---------- */
+  if(view==='history') return <OppHistory rep={rep} goBook={()=>setView('book')} embed={EMBED} />;
+
+  /* ---------- confirmation ---------- */
+  if(done){
+    const booked = done.filter(d=>d.status==='booked').length;
+    return (
+      <div className="pt-10">
+        <div className="bg-ink rounded-xl p-7 text-zinc-200">
+          <div className="flex items-center gap-3 mb-5">
+            <span className="w-9 h-9 rounded-full bg-emerald-500 text-white flex items-center justify-center font-bold">✓</span>
+            <h2 className="text-2xl font-bold text-white">{booked} appointment{booked===1?'':'s'} booked for {cust.name}</h2>
+            {emergency && <span className="ml-1 px-2.5 py-1 rounded-md bg-red-600 text-white text-xs font-bold uppercase tracking-wide animate-pulse">⚡ Emergency</span>}
+          </div>
+          <div className="space-y-2.5">
+            {done.map(d=>(
+              <div key={d.uid} className="bg-zinc-800/70 rounded-lg px-4 py-3 flex justify-between gap-4 flex-wrap">
+                <div>
+                  <div className="font-semibold text-white flex items-center gap-2">{d.label} — {APPT[d.appointment_type]}{d.job_type_label?(' · '+d.job_type_label):''} <Badge p={d.provider}/>
+                    {d.live
+                      ? <span className="text-[10px] font-bold uppercase tracking-wide text-emerald-300 bg-emerald-900/40 rounded px-1.5 py-0.5">Live</span>
+                      : <span className="text-[10px] font-bold uppercase tracking-wide text-zinc-400 bg-zinc-700/50 rounded px-1.5 py-0.5">Sim</span>}
+                  </div>
+                  <div className="text-sm text-zinc-400 mt-0.5">{d.slot.day} · {d.slot.time}{d.assigned_rep?(' · '+d.assigned_rep):''}</div>
+                </div>
+                {d.status==='booked'
+                  ? <div className="font-mono text-xs text-emerald-300 self-center">{d.provider_ref}</div>
+                  : <div className="text-xs text-red-300 self-center max-w-[240px] text-right">Failed: {d.error||'error'}</div>}
+              </div>
+            ))}
+          </div>
+          <div className="text-sm text-zinc-400 mt-4">
+            Channel: <b className="text-zinc-200">{channel==='other'?channelOther:chLabel(channel)}</b> · Campaign: <b className="text-zinc-200">{campaign==='other'?campaignOther:cmpLabel(campaign)}</b> · {source}
+          </div>
+        </div>
+
+        <button className={btn+" mt-6"} onClick={reset}>Start a new booking</button>
+      </div>
+    );
+  }
+
+  /* ---------- builder ---------- */
+  return (
+    <div>
+      <div className="lg:flex lg:gap-6 pt-10 items-start">
+       <OffersPanel open={offersOpen} setOpen={setOffersOpen} expanded={offerExpanded} setExpanded={setOfferExpanded} />
+       <div className="min-w-0 flex-1">
+
+      {/* Page header lives inside the booking column so "Book a Service" lines up
+          with the sections below it; the Offers column sits outside, to its left. */}
+      <div>
+        <p className="eyebrow uppercase text-xs font-semibold text-brand mb-2">Growth Team</p>
+        <h1 className="text-4xl md:text-5xl font-bold text-ink mb-2">Book a Service</h1>
+        <p className="text-body">One customer, any combination of services across the Advosy family.</p>
+        <div className="text-xs text-muted mt-2">Signed in as <b className="text-ink">{rep.full_name}</b> — appointments are credited to you.
+          {!EMBED && <button onClick={()=>setView('history')} className="text-brand font-semibold hover:underline ml-2">Booking History ↗</button>}
+          {!EMBED && rep.role==='admin' && <a href="admin-report.html" className="text-brand font-semibold hover:underline ml-2">Payroll &amp; Reports ↗</a>}
+          {!EMBED && <button onClick={logout} className="text-brand font-semibold hover:underline ml-2">Sign out</button>}
+        </div>
+      </div>
+
+      {/* 1. Customer & Lead */}
+      <Section n="1" title="Customer & Lead" extra={<span className="text-sm text-muted">— entered once</span>} />
+      <div className="bg-white rounded-xl border border-line p-6">
+        <div className="grid md:grid-cols-2 gap-4 mb-4">
+          <div><label className={fld}>Name *</label><input className={inp} value={cust.name} onChange={e=>setCust({...cust,name:e.target.value})} placeholder="Jane Homeowner"/></div>
+          <div><label className={fld}>Phone *</label><input className={inp} value={cust.phone} onChange={e=>setCust({...cust,phone:e.target.value})} placeholder="(480) 555-0199"/></div>
+        </div>
+        <div className="grid md:grid-cols-2 gap-4 mb-4">
+          <div>
+            <label className={fld}>Email {emailDeclined ? <span className="text-muted font-normal normal-case">(declined)</span> : '*'}</label>
+            <input className={inp} type="email" value={cust.email} disabled={emailDeclined} onChange={e=>setCust({...cust,email:e.target.value})} placeholder="jane@email.com"/>
+            {cust.email.trim() && !emailValid && !emailDeclined && <p className="text-xs text-rose-600 mt-1">Enter a valid email (e.g. jane@email.com).</p>}
+            <label className="flex items-center gap-2 text-xs text-muted mt-1.5 cursor-pointer"><input type="checkbox" checked={emailDeclined} onChange={e=>{const d=e.target.checked; setEmailDeclined(d); if(d) setCust(c=>({...c,email:''}));}}/>Customer declined to provide email</label>
+          </div>
+          <div>
+            <label className={fld}>Service address <span className="text-muted font-normal normal-case">(AZ &amp; NV only)</span></label>
+            {!manualAddr ? (
+              <>
+                <AddressInput value={cust.address} onChange={(a,comp)=>setCust(c=>({...c, address:a, addr: comp||null}))}/>
+                <button type="button" onClick={()=>setManualAddr(true)} className="text-xs text-brand font-semibold hover:underline mt-1.5">Can’t find it? Enter address manually</button>
+              </>
+            ) : (
+              <div className="space-y-2">
+                <input className={inp} placeholder="Street address" value={(cust.addr&&cust.addr.street)||''} onChange={e=>setManualField('street',e.target.value)} />
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  <input className={inp+" sm:col-span-2"} placeholder="City" value={(cust.addr&&cust.addr.city)||''} onChange={e=>setManualField('city',e.target.value)} />
+                  <select className={inp} value={(cust.addr&&cust.addr.state)||''} onChange={e=>setManualField('state',e.target.value)}>
+                    <option value="">State</option><option value="AZ">AZ</option><option value="NV">NV</option>
+                  </select>
+                  <input className={inp} inputMode="numeric" maxLength={5} placeholder="ZIP" value={(cust.addr&&cust.addr.zip)||''} onChange={e=>setManualField('zip',e.target.value.replace(/\D/g,''))} />
+                </div>
+                <button type="button" onClick={()=>{setManualAddr(false); setCust(c=>({...c, addr:null, address:''}));}} className="text-xs text-brand font-semibold hover:underline">← Back to address search</button>
+              </div>
+            )}
+          </div>
+        </div>
+        <div className="grid md:grid-cols-3 gap-4">
+          <div>
+            <label className={fld}>Source</label>
+            <div className="inline-flex rounded-md border border-line overflow-hidden">
+              <button className={"px-4 py-2 text-sm font-medium "+(source==='inbound'?'bg-ink text-white':'bg-white text-muted')} onClick={()=>setSource('inbound')}>Inbound</button>
+              <button className={"px-4 py-2 text-sm font-medium "+(source==='outbound'?'bg-ink text-white':'bg-white text-muted')} onClick={()=>setSource('outbound')}>Outbound</button>
+            </div>
+          </div>
+          <div>
+            <label className={fld}>Channel *</label>
+            <select className={inp} value={channel} onChange={e=>setChannel(e.target.value)}>
+              <option value="">Select channel…</option>
+              {CHANNELS.map(([v,l])=><option key={v} value={v}>{l}</option>)}
+            </select>
+            {channel==='other' && <input className={inp+" mt-2"} placeholder="Specify channel…" value={channelOther} onChange={e=>setChannelOther(e.target.value)}/>}
+          </div>
+          <div>
+            <label className={fld}>Campaign *</label>
+            <select className={inp} value={campaign} onChange={e=>setCampaign(e.target.value)}>
+              <option value="">Select campaign…</option>
+              {CAMPAIGNS.map(([v,l])=><option key={v} value={v}>{l}</option>)}
+            </select>
+            {campaign==='other' && <input className={inp+" mt-2"} placeholder="Specify campaign…" value={campaignOther} onChange={e=>setCampaignOther(e.target.value)}/>}
+          </div>
+        </div>
+
+        <div className="grid md:grid-cols-2 gap-4 mt-4 items-start">
+          <div>
+            <label className={fld}>Gate Code <span className="text-muted font-normal normal-case">(optional)</span></label>
+            <input className={inp+" max-w-[140px] tracking-widest"} maxLength={8} value={gateCode}
+              onChange={e=>setGateCode(e.target.value)} placeholder="••••" />
+          </div>
+          <div>
+            <label className={fld}>Emergency</label>
+            <div className="flex items-center gap-2">
+              <button onClick={()=>setEmergency(false)}
+                className={"px-5 py-2 text-sm font-medium rounded-md border transition "+(!emergency?'bg-ink text-white border-ink':'bg-white text-muted border-line hover:border-brand')}>No</button>
+              <button onClick={()=>setEmergency(true)}
+                className={"px-5 py-2 text-sm font-bold rounded-md border transition "+(emergency?'emg-on':'bg-white text-muted border-line hover:border-brand')}>⚡ Yes</button>
+              {emergency && <span className="text-xs font-bold text-danger uppercase tracking-wide">Emergency dispatch</span>}
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-4">
+          <label className={fld}>Lead Notes</label>
+          <textarea className={inp+" h-28 resize-y"} value={leadNotes} onChange={e=>setLeadNotes(e.target.value)}
+            placeholder="Notes for the appointment — the customer's issue, access details, anything the tech should know. Type or paste here…"></textarea>
+        </div>
+      </div>
+
+      {/* 2. Add services */}
+      <Section n="2" title="Add Services" />
+      <div className="bg-white rounded-xl border border-line p-6">
+        <label className={fld}>Service line</label>
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+          {CATALOG.map(s=>(
+            <button key={s.key} onClick={()=>chooseService(s.key)}
+              className={"text-left bg-surface rounded-xl border p-4 transition hover:border-brand "+(pick===s.key?'border-brand ring-2 ring-brand/30':'border-line')}>
+              <div className="flex items-center justify-between">
+                <div className="font-bold text-ink text-sm">{s.label}</div>
+                {(s.provider==='ghl'||s.provider==='servicetitan')
+                  ? <span className="text-[9px] font-bold uppercase tracking-wide text-emerald-600 bg-emerald-50 rounded px-1.5 py-0.5">Live</span>
+                  : <span className="text-[9px] font-bold uppercase tracking-wide text-muted bg-surface rounded px-1.5 py-0.5">Sim</span>}
+              </div>
+              <div className="text-xs text-muted mb-2">{s.brand}</div>
+              <Badge p={s.provider}/>
+            </button>
+          ))}
+        </div>
+
+        {pick && (
+          <div className="mt-6 border-t border-line pt-5">
+            <label className={fld}>Appointment type * <span className="text-muted font-normal normal-case">(only what {byKey(pick).label} offers)</span></label>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              {byKey(pick).types.map(t=>(
+                <button key={t} onClick={()=>chooseType(t)}
+                  className={"rounded-lg border p-3 text-center transition "+(apptType===t?'border-brand ring-2 ring-brand/30 bg-brand/5':'border-line hover:border-brand')}>
+                  <div className="text-3xl leading-none mb-1.5">{APPT_EMOJI[t]}</div>
+                  <div className="text-xs font-semibold text-ink">{APPT[t]}</div>
+                </button>
+              ))}
+            </div>
+            <div className="text-xs text-muted mt-2">Routes to <b className="text-ink">{PROV[byKey(pick).provider].label}</b> · {PROV[byKey(pick).provider].note}</div>
+
+            {apptType && apptType!=='sold_customer' && byKey(pick).provider==='servicetitan' && (
+              <div className="mt-5">
+                <label className={fld}>Job type * <span className="text-muted font-normal normal-case">(ServiceTitan — pick the specific job)</span></label>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                  {stJobTypes(pick,apptType).map(o=>(
+                    <button key={o.jt+o.label} onClick={()=>chooseJobType(o)}
+                      className={"rounded-lg border px-3 py-2.5 text-sm font-semibold text-left transition "+(jobType&&jobType.jt===o.jt&&jobType.label===o.label?'border-brand ring-2 ring-brand/30 bg-brand/5 text-ink':'border-line text-body hover:border-brand')}>
+                      {o.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {apptType==='sold_customer' && (() => {
+              const saleOk = Number(contractValue)>0 && sellWhat.length>0 && (!sellWhat.includes('Other')||sellOther.trim());
+              const toggleSell = o => setSellWhat(prev => prev.includes(o) ? prev.filter(x=>x!==o) : [...prev,o]);
+              return (
+              <div className="mt-5">
+                <div className="rounded-lg bg-emerald-50 border border-emerald-200 px-4 py-3 text-sm text-emerald-900 mb-4">
+                  💰 <b>New Sold Customer</b> — record a Pestkee sale you closed on the phone. No appointment is scheduled; this logs the opportunity and the contract value.
+                </div>
+                <div className="grid md:grid-cols-2 gap-4">
+                  <div>
+                    <label className={fld}>Total Contract Value *</label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted text-sm">$</span>
+                      <input className={inp+" pl-7"} type="number" min="0" step="0.01" inputMode="decimal"
+                        value={contractValue} onChange={e=>setContractValue(e.target.value)} placeholder="0.00" />
+                    </div>
+                  </div>
+                </div>
+                <div className="mt-4">
+                  <label className={fld}>What did you sell? * <span className="text-muted font-normal normal-case">(select all that apply)</span></label>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                    {SALE_OPTIONS.map(o=>{
+                      const on=sellWhat.includes(o);
+                      return (
+                      <button key={o} onClick={()=>toggleSell(o)}
+                        className={"rounded-lg border px-3 py-2.5 text-sm font-semibold text-left transition flex items-center gap-2 "+(on?'border-brand ring-2 ring-brand/30 bg-brand/5 text-ink':'border-line text-body hover:border-brand')}>
+                        <span className={"w-4 h-4 rounded flex items-center justify-center text-[10px] flex-none border "+(on?'bg-brand border-brand text-white':'border-line text-transparent')}>✓</span>
+                        {o}
+                      </button>
+                      );
+                    })}
+                  </div>
+                  {sellWhat.includes('Other') && (
+                    <input className={inp+" mt-2"} placeholder="Describe what else was sold…" value={sellOther} onChange={e=>setSellOther(e.target.value)} />
+                  )}
+                  {sellWhat.length>0 && <div className="text-xs text-muted mt-2">Selected: <b className="text-ink">{sellWhat.map(o=>o==='Other'?(sellOther.trim()||'Other'):o).join(', ')}</b></div>}
+                </div>
+                <div className="mt-5 flex items-center gap-2">
+                  <button className={btn} disabled={!saleOk} onClick={addToCart}>Add sold customer</button>
+                  <button className={btnGhost} onClick={()=>setPick(null)}>Cancel</button>
+                </div>
+              </div>
+              );
+            })()}
+
+            {apptType && apptType!=='sold_customer' && (byKey(pick).provider!=='servicetitan' || jobType) && (
+              <div className="mt-5">
+                <div className="flex items-center justify-between mb-1">
+                  <label className={fld+" mb-0"}>Availability{jobType?(' · '+jobType.label):''}</label>
+                  <label className="flex items-center gap-2 text-xs text-muted cursor-pointer select-none">
+                    <input type="checkbox" checked={driveAware} onChange={e=>setDriveAware(e.target.checked)} className="accent-brand"/>
+                    Drive-time aware
+                  </label>
+                </div>
+                {loading ? (
+                  <div className="text-sm text-muted flex items-center gap-2"><span className="spin inline-block w-4 h-4 border-2 border-line border-t-brand rounded-full"></span>Pulling live availability…</div>
+                ) : availErr ? (
+                  <div className="text-sm text-danger bg-red-50 border border-red-200 rounded-md px-3 py-2">Couldn't load live availability — {availErr}</div>
+                ) : slots.length ? (() => {
+                  const availSet = new Set(slots.map(s=>s.dateKey));
+                  const keys = [...availSet].sort();
+                  const min = keys[0], max = keys[keys.length-1];
+                  const month = calMonth || new Date(selDate ? selDate+'T12:00:00' : Date.now());
+                  const y = month.getFullYear(), mo = month.getMonth();
+                  const firstWk = new Date(y,mo,1).getDay();
+                  const dim = new Date(y,mo+1,0).getDate();
+                  const cells = [];
+                  for(let i=0;i<firstWk;i++) cells.push(null);
+                  for(let dd=1;dd<=dim;dd++) cells.push(dd);
+                  const monthLabel = month.toLocaleDateString('en-US',{month:'long',year:'numeric'});
+                  const daySlots = selDate ? slots.filter(s=>s.dateKey===selDate) : [];
+                  return (
+                    <div>
+                      {/* day navigator */}
+                      <div className="flex items-center justify-between bg-surface rounded-lg px-3 py-2 mb-3">
+                        <button onClick={()=>shiftDay(-1)} disabled={!selDate||selDate<=min}
+                          className="w-9 h-9 rounded-md bg-white border border-line flex items-center justify-center text-lg text-ink disabled:opacity-30 hover:border-brand">‹</button>
+                        <div className="text-sm font-bold text-ink text-center">{selDate ? fullDateKey(selDate) : 'Pick a date'}</div>
+                        <button onClick={()=>shiftDay(1)} disabled={!selDate||selDate>=max}
+                          className="w-9 h-9 rounded-md bg-white border border-line flex items-center justify-center text-lg text-ink disabled:opacity-30 hover:border-brand">›</button>
+                      </div>
+
+                      <div className="grid md:grid-cols-2 gap-5">
+                        {/* month calendar */}
+                        <div>
+                          <div className="flex items-center justify-between mb-2">
+                            <button onClick={()=>setCalMonth(new Date(y,mo-1,1))} className="w-7 h-7 rounded-md border border-line text-ink hover:border-brand">‹</button>
+                            <div className="text-sm font-semibold text-ink">{monthLabel}</div>
+                            <button onClick={()=>setCalMonth(new Date(y,mo+1,1))} className="w-7 h-7 rounded-md border border-line text-ink hover:border-brand">›</button>
+                          </div>
+                          <div className="grid grid-cols-7 gap-1 mb-1">
+                            {WEEKDAYS.map(w=>(<div key={w} className="text-center text-[9px] font-semibold text-muted truncate">{w}</div>))}
+                          </div>
+                          <div className="grid grid-cols-7 gap-1">
+                            {cells.map((dd,idx)=>{
+                              if(dd===null) return <div key={'e'+idx}></div>;
+                              const key=ymd(new Date(y,mo,dd));
+                              const has=availSet.has(key);
+                              const isSel=key===selDate;
+                              return (
+                                <button key={key} disabled={!has}
+                                  onClick={()=>{setSelDate(key); setChosenSlot(null);}}
+                                  className={"h-9 rounded-md text-sm transition "+(isSel?'bg-brand text-white font-bold':has?'bg-brand/10 text-ink font-semibold hover:bg-brand/20':'text-zinc-300 cursor-not-allowed')}>
+                                  {dd}
+                                </button>
+                              );
+                            })}
+                          </div>
+                          <div className="flex items-center gap-3 mt-2 text-[11px] text-muted">
+                            <span className="inline-flex items-center gap-1"><span className="w-3 h-3 rounded bg-brand/10 inline-block"></span>Available</span>
+                            <span className="inline-flex items-center gap-1"><span className="w-3 h-3 rounded bg-brand inline-block"></span>Selected</span>
+                          </div>
+                        </div>
+
+                        {/* times for the selected date */}
+                        <div>
+                          <div className="text-sm font-semibold text-ink mb-2">{selDate ? ('Times — '+fullDateKey(selDate)) : 'Select a date'}</div>
+                          {selDate && daySlots.length ? (
+                            <div className="grid grid-cols-2 gap-2">
+                              {daySlots.map(s=>{
+                                const dr=s.drive||{};
+                                const blocked = driveAware && dr.fits===false;
+                                const sel = chosenSlot&&chosenSlot.id===s.id;
+                                const driveTxt = dr.live ? '⚡ Live slot'
+                                  : dr.handled ? '🚗 ServiceTitan zoning'
+                                  : dr.first ? '🚗 First job of day'
+                                  : dr.fits ? '🚗 '+dr.mins+' min drive'
+                                  : '🚗 '+dr.mins+' min — too tight';
+                                return (
+                                  <button key={s.id} disabled={blocked} onClick={()=>!blocked&&setChosenSlot(s)}
+                                    className={"text-left rounded-md border px-3 py-2 text-sm transition "+(blocked?'border-line bg-surface opacity-60 cursor-not-allowed':sel?'bg-ink text-white border-ink':'border-line hover:border-brand')}>
+                                    <div className="font-semibold">{s.time}</div>
+                                    <div className={"text-[11px] mt-0.5 "+(blocked?'text-danger font-medium':((dr.live||(dr.fits&&!dr.first&&!dr.handled))?'text-emerald-600':(sel?'text-zinc-300':'text-muted')))}>{driveTxt}</div>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          ) : (
+                            <div className="text-sm text-muted">{selDate ? 'No open times on this day.' : 'Choose a highlighted date on the calendar.'}</div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })() : <div className="text-sm text-muted">No open slots in range.</div>}
+
+                <div className="mt-4 flex items-center gap-2">
+                  <button className={btn} disabled={!chosenSlot} onClick={addToCart}>Add to booking</button>
+                  <button className={btnGhost} onClick={()=>setPick(null)}>Cancel</button>
+                </div>
+                {chosenSlot && (
+                  <div className="flex flex-wrap items-center gap-2 mt-4">
+                    <span className="text-sm text-muted">Suggested add-ons:</span>
+                    {byKey(pick).addons.map(a=>(
+                      <button key={a} onClick={()=>addAddonFlow(a)} className="rounded-full border border-dashed border-brand text-brand text-xs font-semibold px-3 py-1.5 hover:bg-brand/5">+ {byKey(a).label}</button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* 3. Cart */}
+      <Section n="3" title="Booking Overview" extra={cart.length>0 && <span className="rounded-full bg-brand/10 text-brand text-xs font-bold px-2.5 py-0.5">{cart.length}</span>} />
+      <div className="bg-white rounded-xl border border-line p-6">
+        {cart.length===0 ? (
+          <div className="text-center text-muted text-sm border border-dashed border-line rounded-lg py-8">No services added yet. Pick a service line above.</div>
+        ) : (
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-left text-[11px] uppercase tracking-wide text-muted border-b-2 border-line">
+                <th className="py-2 pr-3">Service</th><th className="py-2 pr-3">Appointment</th><th className="py-2 pr-3">Backend</th><th className="py-2 pr-3">Slot</th><th className="py-2 pr-3">Assigned</th><th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {cart.map(it=>(
+                <tr key={it.uid} className="border-b border-line">
+                  <td className="py-3 pr-3"><div className="font-semibold text-ink">{it.label}</div><div className="text-muted text-xs">{it.brand}</div></td>
+                  <td className="py-3 pr-3">{APPT[it.appointment_type]}{it.job_type_label&&<div className="text-muted text-xs">{it.job_type_label}</div>}{it.appointment_type==='sold_customer'&&<div className="text-emerald-600 text-xs font-bold">{TC.money(it.contract_value)}</div>}</td>
+                  <td className="py-3 pr-3"><Badge p={it.provider}/></td>
+                  <td className="py-3 pr-3">{it.slot.day}<div className="text-muted text-xs">{it.slot.time}</div></td>
+                  <td className="py-3 pr-3 text-muted">{it.slot.who.replace('Round-robin → ','')}</td>
+                  <td className="py-3"><button onClick={()=>removeItem(it.uid)} className="text-danger font-bold text-lg leading-none">×</button></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+
+      {/* 4. Book */}
+      <div className="mt-6">
+        <button className="w-full rounded-md bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-base px-6 py-4 disabled:opacity-40 disabled:cursor-not-allowed transition" disabled={!canBook||booking} onClick={bookAll}>
+          {booking ? 'Booking…' : `Book ${cart.length||''} appointment${cart.length===1?'':'s'} for ${cust.name||'customer'}`}
+        </button>
+        {!canBook && <p className="text-xs text-muted mt-2">Need a customer name + phone/email, channel, campaign, and at least one service.</p>}
+      </div>
+
+       </div>
+       <aside className={"w-full mt-6 lg:mt-0 shrink-0 transition-all duration-500 ease-in-out "+(offerExpanded?"lg:w-0 lg:-ml-6 lg:opacity-0 lg:overflow-hidden lg:pointer-events-none":"lg:w-[360px] lg:opacity-100")}><div className="lg:sticky lg:top-20"><Leaderboard rep={rep}/></div></aside>
+      </div>
+    </div>
+  );
+}
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+</script>
+
+</body>
+</html>

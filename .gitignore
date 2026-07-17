@@ -1,0 +1,19 @@
+# OS junk
+.DS_Store
+
+# Env & credentials
+.env
+.env.*
+*.local
+
+# Vercel
+.vercel/
+
+# Build artifacts / zips
+*.zip
+ziq2B9aU
+ziTmD6Oa
+
+# Customer data - never commit PII
+Pestkee Active Customers LAL.csv
+*.csv

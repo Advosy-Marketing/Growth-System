@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Advosy Growth — Time Clock</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0b0d12; --panel:#141822; --panel2:#1b2130; --line:#262d3d;
+    --txt:#e8ecf4; --mut:#8b95a9; --accent:#6366f1; --accent2:#818cf8;
+    --green:#22c55e; --greenbg:#0e2a1a; --amber:#f59e0b; --red:#ef4444;
+    --radius:16px;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:Inter,system-ui,sans-serif;background:var(--bg);color:var(--txt);-webkit-font-smoothing:antialiased}
+  a{color:var(--accent2)}
+  .wrap{max-width:1100px;margin:0 auto;padding:0 18px 80px}
+  header.top{display:flex;align-items:center;justify-content:space-between;padding:18px 0;position:sticky;top:0;background:linear-gradient(180deg,var(--bg) 70%,transparent);z-index:20}
+  .brand{display:flex;align-items:center;gap:11px;font-weight:800;letter-spacing:-.02em;font-size:18px}
+  .logo{width:34px;height:34px;border-radius:9px;background:linear-gradient(135deg,var(--accent),var(--accent2));display:grid;place-items:center;font-weight:800;color:#fff}
+  .who{display:flex;align-items:center;gap:10px;font-size:14px;color:var(--mut)}
+  .who b{color:var(--txt)}
+  .btn{border:0;border-radius:11px;padding:10px 16px;font-weight:600;font-size:14px;cursor:pointer;font-family:inherit;transition:.15s;background:var(--panel2);color:var(--txt)}
+  .btn:hover{filter:brightness(1.15)}
+  .btn.ghost{background:transparent;border:1px solid var(--line);color:var(--mut)}
+  .btn.primary{background:var(--accent);color:#fff}
+  .btn.green{background:var(--green);color:#06210f}
+  .btn.red{background:var(--red);color:#fff}
+  .btn:disabled{opacity:.5;cursor:not-allowed}
+  .tabs{display:flex;gap:6px;border-bottom:1px solid var(--line);margin:6px 0 24px;overflow-x:auto}
+  .tab{padding:12px 16px;font-weight:600;font-size:14px;color:var(--mut);cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap}
+  .tab.active{color:var(--txt);border-color:var(--accent)}
+  .grid{display:grid;gap:16px}
+  .cards{grid-template-columns:repeat(auto-fit,minmax(180px,1fr))}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:18px}
+  .stat .lbl{font-size:12px;text-transform:uppercase;letter-spacing:.07em;color:var(--mut);font-weight:600}
+  .stat .val{font-size:30px;font-weight:800;margin-top:6px;letter-spacing:-.02em}
+  .stat .sub{font-size:12px;color:var(--mut);margin-top:2px}
+  .clockcard{display:flex;flex-direction:column;align-items:center;text-align:center;gap:14px;padding:34px}
+  .statusdot{display:inline-flex;align-items:center;gap:8px;font-weight:600;font-size:14px;padding:6px 13px;border-radius:999px;background:var(--panel2);color:var(--mut)}
+  .statusdot.on{background:var(--greenbg);color:#5ee08f}
+  .dot{width:9px;height:9px;border-radius:50%;background:currentColor}
+  .statusdot.on .dot{animation:pulse 1.6s infinite}
+  @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(34,197,94,.5)}70%{box-shadow:0 0 0 8px rgba(34,197,94,0)}100%{box-shadow:0 0 0 0 rgba(34,197,94,0)}}
+  .bigtimer{font-size:54px;font-weight:800;letter-spacing:-.03em;font-variant-numeric:tabular-nums}
+  .bigbtn{font-size:18px;padding:16px 44px;border-radius:14px}
+  .sec-title{font-size:13px;text-transform:uppercase;letter-spacing:.08em;color:var(--mut);font-weight:700;margin:26px 0 12px}
+  .avatar{width:34px;height:34px;border-radius:50%;display:grid;place-items:center;font-weight:700;font-size:13px;color:#fff;flex:none}
+  .row{display:flex;align-items:center;gap:12px}
+  table{width:100%;border-collapse:collapse;font-size:14px}
+  th{ text-align:left;color:var(--mut);font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.05em;padding:10px 12px;border-bottom:1px solid var(--line)}
+  td{padding:11px 12px;border-bottom:1px solid var(--line)}
+  tr:last-child td{border-bottom:0}
+  .num{text-align:right;font-variant-numeric:tabular-nums}
+  .pill{display:inline-block;padding:3px 9px;border-radius:999px;font-size:11px;font-weight:600;background:var(--panel2);color:var(--mut)}
+  .pill.live{background:var(--greenbg);color:#5ee08f}
+  .muted{color:var(--mut)}
+  .workingnow{grid-template-columns:repeat(auto-fill,minmax(220px,1fr))}
+  .wn-card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px;display:flex;flex-direction:column;gap:10px}
+  .wn-card.on{border-color:#1f5135;background:linear-gradient(180deg,var(--greenbg),var(--panel))}
+  .wn-timer{font-size:22px;font-weight:800;font-variant-numeric:tabular-nums}
+  input,select{font-family:inherit;font-size:14px;background:var(--panel2);border:1px solid var(--line);border-radius:10px;color:var(--txt);padding:10px 12px;width:100%}
+  input:focus,select:focus{outline:0;border-color:var(--accent)}
+  label.fld{display:block;font-size:12px;color:var(--mut);font-weight:600;margin:0 0 5px}
+  .modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;place-items:center;z-index:50;padding:20px}
+  .modal-bg.show{display:grid}
+  .modal{background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:26px;max-width:420px;width:100%}
+  .modal h3{margin:0 0 18px;font-size:18px}
+  .pinpad{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:8px}
+  .pinkey{padding:16px;font-size:20px;font-weight:700;background:var(--panel2);border:1px solid var(--line);border-radius:12px;cursor:pointer;text-align:center}
+  .pinkey:active{background:var(--accent);color:#fff}
+  .pindisp{font-size:30px;letter-spacing:14px;text-align:center;height:42px;font-weight:800}
+  .err{color:#fca5a5;font-size:13px;min-height:18px;text-align:center}
+  .flex{display:flex;gap:10px;align-items:center}
+  .between{justify-content:space-between}
+  .hide{display:none!important}
+  .toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);background:var(--panel2);border:1px solid var(--line);padding:12px 20px;border-radius:12px;font-size:14px;font-weight:600;z-index:60;opacity:0;transition:.25s;pointer-events:none}
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(-4px)}
+  .toast.good{border-color:#1f5135;color:#5ee08f}
+  .toast.bad{border-color:#5b2330;color:#fca5a5}
+  @media(max-width:560px){.bigtimer{font-size:42px}.who b{display:none}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div class="brand"><div class="logo">A</div> Advosy Growth</div>
+    <div class="who" id="who"></div>
+  </header>
+
+  <!-- SIGN IN -->
+  <div id="signin" class="card" style="max-width:420px;margin:40px auto;text-align:center">
+    <h2 style="margin:0 0 6px">Time Clock</h2>
+    <p class="muted" style="margin:0 0 18px;font-size:14px">Pick your name and enter your PIN to start.</p>
+    <select id="si_user" style="margin-bottom:14px"><option value="">Loading team…</option></select>
+    <div class="pindisp" id="si_disp"></div>
+    <div class="pinpad" id="si_pad"></div>
+    <div class="err" id="si_err"></div>
+  </div>
+
+  <!-- APP -->
+  <div id="app" class="hide">
+    <div class="tabs" id="tabs">
+      <div class="tab active" data-tab="clock">My Clock</div>
+      <div class="tab" data-tab="board">Team Board</div>
+      <div class="tab" data-tab="board2">Leaderboard</div>
+      <div class="tab admin-only hide" data-tab="admin">Admin</div>
+    </div>
+
+    <!-- MY CLOCK -->
+    <section id="t-clock">
+      <div class="card clockcard">
+        <div class="statusdot" id="my_status"><span class="dot"></span><span id="my_status_t">Off the clock</span></div>
+        <div class="bigtimer" id="my_timer">0:00:00</div>
+        <button class="btn green bigbtn" id="my_toggle">Clock In</button>
+        <div class="muted" id="my_since" style="font-size:13px"></div>
+      </div>
+      <div class="grid cards" style="margin-top:16px">
+        <div class="card stat"><div class="lbl">Today</div><div class="val" id="my_today">0.0h</div><div class="sub">hours on the clock</div></div>
+        <div class="card stat"><div class="lbl">This Week</div><div class="val" id="my_week">0.0h</div><div class="sub">Mon–Sun</div></div>
+        <div class="card stat"><div class="lbl">Commissions wk</div><div class="val" id="my_comm">$0</div><div class="sub"><span id="my_commn">0</span> appts booked</div></div>
+        <div class="card stat"><div class="lbl">Est. pay wk</div><div class="val" id="my_pay">$0</div><div class="sub">hours × rate + comm</div></div>
+      </div>
+      <div class="sec-title">Recent shifts</div>
+      <div class="card" style="padding:0;overflow:hidden"><table id="my_shifts"><tbody></tbody></table></div>
+    </section>
+
+    <!-- TEAM BOARD -->
+    <section id="t-board" class="hide">
+      <div class="flex between"><div class="sec-title" style="margin:0">Working now <span class="pill live" id="wn_count">0</span></div><div class="muted" style="font-size:12px" id="rt_state">● live</div></div>
+      <div class="grid workingnow" id="working_now" style="margin-top:12px"></div>
+      <div class="sec-title">Full team</div>
+      <div class="card" style="padding:0;overflow:hidden"><table id="team_tbl"><thead><tr><th>Rep</th><th>Status</th><th class="num">Today</th><th class="num">Week</th><th class="num">Comm wk</th></tr></thead><tbody></tbody></table></div>
+    </section>
+
+    <!-- LEADERBOARD -->
+    <section id="t-board2" class="hide">
+      <div class="flex between" style="margin-bottom:12px">
+        <div class="sec-title" style="margin:0">Leaderboard</div>
+        <div class="flex">
+          <button class="btn ghost" id="lb_today">Today</button>
+          <button class="btn primary" id="lb_week">This week</button>
+        </div>
+      </div>
+      <div class="card" style="padding:0;overflow:hidden"><table id="lb_tbl"><thead><tr><th>#</th><th>Rep</th><th class="num">Hours</th><th class="num">Appts</th><th class="num">Commissions</th></tr></thead><tbody></tbody></table></div>
+      <p class="muted" style="font-size:12.5px;margin-top:14px">Commissions post automatically the moment a booking is made in the Growth booking system — tied to whoever is on the clock.</p>
+    </section>
+
+    <!-- ADMIN -->
+    <section id="t-admin" class="hide">
+      <div class="flex between">
+        <div class="sec-title" style="margin:0">Team members</div>
+        <button class="btn primary" id="ad_add">+ Add member</button>
+      </div>
+      <div class="card" style="padding:0;overflow:hidden;margin-top:12px"><table id="ad_tbl"><thead><tr><th>Name</th><th>Team</th><th>Role</th><th class="num">Rate/hr</th><th>PIN</th><th></th></tr></thead><tbody></tbody></table></div>
+
+      <div class="sec-title">Commission rates — per appointment type</div>
+      <div class="card" style="padding:0;overflow:hidden"><table id="rate_tbl"><thead><tr><th>Appointment type</th><th class="num">Commission</th><th></th></tr></thead><tbody></tbody></table></div>
+      <p class="muted" style="font-size:12.5px;margin-top:14px">These amounts drive what each booked appointment pays the rep. Changes apply to new bookings instantly.</p>
+    </section>
+  </div>
+</div>
+
+<!-- generic modal -->
+<div class="modal-bg" id="modal"><div class="modal" id="modal_inner"></div></div>
+<div class="toast" id="toast"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+const SUPABASE_URL = "https://andzztvmaleiefxcfjwh.supabase.co";
+const ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFuZHp6dHZtYWxlaWVmeGNmandoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3OTA3OTMsImV4cCI6MjA5NzM2Njc5M30.3C9YUDfVmZmLRV__Jd5DBfzr14-zJXsVHJIp8z2u43Y";
+const FN = SUPABASE_URL + "/functions/v1/";
+const sb = supabase.createClient(SUPABASE_URL, ANON, { realtime:{ params:{ eventsPerSecond:5 } } });
+
+const $ = s => document.querySelector(s);
+const $$ = s => [...document.querySelectorAll(s)];
+const LS = "advosy_timeclock_me";
+let me = null;            // {id, full_name, pin, role}
+let roster = [], entries = [], comms = [], rates = [];
+let lbMode = "week";
+
+// ---------- helpers ----------
+const initials = n => n.split(/\s+/).map(w=>w[0]).slice(0,2).join("").toUpperCase();
+const colorFor = (u) => u.color || ("hsl("+(Math.abs([...u.id].reduce((a,c)=>a+c.charCodeAt(0),0))*47%360)+" 55% 50%)");
+const money = n => "$"+(Math.round(n*100)/100).toLocaleString(undefined,{minimumFractionDigits:0,maximumFractionDigits:2});
+function weekStart(){const d=new Date();const day=(d.getDay()+6)%7;d.setHours(0,0,0,0);d.setDate(d.getDate()-day);return d;}
+function dayStart(){const d=new Date();d.setHours(0,0,0,0);return d;}
+function fmtHM(ms){const s=Math.max(0,Math.floor(ms/1000));const h=Math.floor(s/3600),m=Math.floor(s%3600/60),ss=s%60;return h+":"+String(m).padStart(2,"0")+":"+String(ss).padStart(2,"0");}
+function hrs(ms){return (ms/3600000).toFixed(1)+"h";}
+function entryMs(e,since){const start=new Date(e.clock_in).getTime();const end=e.clock_out?new Date(e.clock_out).getTime():Date.now();if(since&&end<since)return 0;return end-Math.max(start,since||0);}
+function toast(msg,kind){const t=$("#toast");t.textContent=msg;t.className="toast show "+(kind||"");setTimeout(()=>t.className="toast",2200);}
+async function call(fn,body){const r=await fetch(FN+fn,{method:"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer "+ANON,"apikey":ANON},body:JSON.stringify(body)});const j=await r.json();if(!r.ok)throw new Error(j.error||"error");return j;}
+
+// ---------- data ----------
+async function loadRoster(){const {data}=await sb.from("v_roster").select("*").eq("is_active",true).order("full_name");roster=data||[];}
+async function loadData(){
+  const ws=weekStart().toISOString();
+  const [e,c,r]=await Promise.all([
+    sb.from("time_entries").select("*").gte("clock_in", new Date(Date.now()-1000*60*60*24*14).toISOString()).order("clock_in",{ascending:false}),
+    sb.from("commissions").select("*").gte("created_at", ws),
+    sb.from("commission_rates").select("*").order("label"),
+  ]);
+  entries=e.data||[]; comms=c.data||[]; rates=r.data||[];
+}
+const userById = id => roster.find(u=>u.id===id) || {id,full_name:"(removed)",color:"#555"};
+
+// ---------- sign in ----------
+function buildPad(dispSel,onSubmit){
+  const pad=$("#si_pad"); pad.innerHTML="";
+  let pin="";
+  const disp=$(dispSel);
+  const render=()=>disp.textContent="•".repeat(pin.length);
+  const keys=["1","2","3","4","5","6","7","8","9","⌫","0","✓"];
+  keys.forEach(k=>{const b=document.createElement("div");b.className="pinkey";b.textContent=k;b.onclick=()=>{
+    if(k==="⌫"){pin=pin.slice(0,-1);render();}
+    else if(k==="✓"){onSubmit(pin);}
+    else if(pin.length<6){pin+=k;render(); if(pin.length>=4){/*allow*/}}
+  };pad.appendChild(b);});
+}
+async function initSignin(){
+  await loadRoster();
+  const sel=$("#si_user");
+  sel.innerHTML='<option value="">Select your name…</option>'+roster.map(u=>`<option value="${u.id}">${u.full_name}</option>`).join("");
+  buildPad("#si_disp", async (pin)=>{
+    const uid=sel.value; const err=$("#si_err");
+    if(!uid){err.textContent="Pick your name first.";return;}
+    if(pin.length<4){err.textContent="Enter your 4-digit PIN.";return;}
+    err.textContent="Checking…";
+    try{
+      const res=await call("clock",{user_id:uid,pin,action:"status"});
+      const u=roster.find(x=>x.id===uid);
+      me={id:uid,full_name:u.full_name,pin,role:u.role};
+      localStorage.setItem(LS,JSON.stringify(me));
+      err.textContent="";
+      startApp();
+    }catch(ex){err.textContent="Wrong PIN. Try again.";}
+  });
+}
+
+// ---------- app ----------
+function startApp(){
+  $("#signin").classList.add("hide");
+  $("#app").classList.remove("hide");
+  $("#who").innerHTML=`<div class="avatar" style="background:${colorFor(userById(me.id))}">${initials(me.full_name)}</div><span>Hi, <b>${me.full_name.split(" ")[0]}</b></span><button class="btn ghost" id="logout">Sign out</button>`;
+  $("#logout").onclick=()=>{localStorage.removeItem(LS);location.reload();};
+  if(me.role==="admin"||me.role==="manager"){$$(".admin-only").forEach(e=>e.classList.remove("hide"));}
+  wireTabs();
+  refreshAll();
+  subscribe();
+  setInterval(tick,1000);
+}
+function wireTabs(){
+  $$(".tab").forEach(t=>t.onclick=()=>{
+    $$(".tab").forEach(x=>x.classList.remove("active"));t.classList.add("active");
+    const tab=t.dataset.tab;
+    $("#t-clock").classList.toggle("hide",tab!=="clock");
+    $("#t-board").classList.toggle("hide",tab!=="board");
+    $("#t-board2").classList.toggle("hide",tab!=="board2");
+    $("#t-admin").classList.toggle("hide",tab!=="admin");
+    if(tab==="admin")renderAdmin();
+  });
+  $("#my_toggle").onclick=toggleClock;
+  $("#lb_today").onclick=()=>{lbMode="today";$("#lb_today").className="btn primary";$("#lb_week").className="btn ghost";renderLeaderboard();};
+  $("#lb_week").onclick=()=>{lbMode="week";$("#lb_week").className="btn primary";$("#lb_today").className="btn ghost";renderLeaderboard();};
+  $("#ad_add").onclick=()=>openRepModal();
+}
+
+let busy=false;
+async function toggleClock(){
+  if(busy)return;busy=true;const btn=$("#my_toggle");btn.disabled=true;
+  try{
+    const res=await call("clock",{user_id:me.id,pin:me.pin,action:"toggle"});
+    toast(res.clocked_in?"Clocked in ✓":"Clocked out ✓","good");
+    await loadData();renderAll();
+  }catch(ex){toast(ex.message,"bad");}
+  busy=false;btn.disabled=false;
+}
+
+// ---------- rendering ----------
+function myOpenEntry(){return entries.find(e=>e.user_id===me.id&&!e.clock_out);}
+function tick(){
+  // live timers
+  const open=myOpenEntry();
+  if(open){$("#my_timer").textContent=fmtHM(Date.now()-new Date(open.clock_in).getTime());}
+  $$("[data-live-since]").forEach(el=>{el.textContent=fmtHM(Date.now()-Number(el.dataset.liveSince));});
+}
+function renderMyClock(){
+  const open=myOpenEntry();
+  const ws=weekStart().getTime(), ds=dayStart().getTime();
+  const mine=entries.filter(e=>e.user_id===me.id);
+  let today=0,week=0;
+  mine.forEach(e=>{today+=entryMs(e,ds);week+=entryMs(e,ws);});
+  $("#my_status").className="statusdot"+(open?" on":"");
+  $("#my_status_t").textContent=open?"On the clock":"Off the clock";
+  $("#my_toggle").textContent=open?"Clock Out":"Clock In";
+  $("#my_toggle").className="btn bigbtn "+(open?"red":"green");
+  $("#my_timer").textContent=open?fmtHM(Date.now()-new Date(open.clock_in).getTime()):"0:00:00";
+  $("#my_since").textContent=open?("Since "+new Date(open.clock_in).toLocaleTimeString([],{hour:"numeric",minute:"2-digit"})):"";
+  $("#my_today").textContent=hrs(today);
+  $("#my_week").textContent=hrs(week);
+  const myComms=comms.filter(c=>c.user_id===me.id);
+  const commSum=myComms.reduce((a,c)=>a+Number(c.amount),0);
+  $("#my_comm").textContent=money(commSum);
+  $("#my_commn").textContent=myComms.length;
+  const rate=Number(userById(me.id).hourly_rate||0);
+  $("#my_pay").textContent=money(week/3600000*rate+commSum);
+  // recent shifts
+  const tb=$("#my_shifts").querySelector("tbody");
+  const rows=mine.slice(0,8).map(e=>{
+    const ms=entryMs(e);const cs=comms.filter(c=>c.time_entry_id===e.id).reduce((a,c)=>a+Number(c.amount),0);
+    const live=!e.clock_out;
+    return `<tr><td>${new Date(e.clock_in).toLocaleDateString([],{weekday:"short",month:"short",day:"numeric"})}</td>
+      <td class="muted">${new Date(e.clock_in).toLocaleTimeString([],{hour:"numeric",minute:"2-digit"})} – ${e.clock_out?new Date(e.clock_out).toLocaleTimeString([],{hour:"numeric",minute:"2-digit"}):'<span class="pill live">now</span>'}</td>
+      <td class="num">${live?`<span data-live-since="${new Date(e.clock_in).getTime()}">${fmtHM(ms)}</span>`:hrs(ms)}</td>
+      <td class="num">${cs?money(cs):'<span class="muted">—</span>'}</td></tr>`;
+  }).join("");
+  tb.innerHTML=rows||`<tr><td colspan="4" class="muted" style="padding:18px">No shifts yet — clock in to get started.</td></tr>`;
+}
+function statsFor(userId,since){
+  let h=0;entries.filter(e=>e.user_id===userId).forEach(e=>h+=entryMs(e,since));
+  const cs=comms.filter(c=>c.user_id===userId&&new Date(c.created_at).getTime()>=since);
+  return {h, comm:cs.reduce((a,c)=>a+Number(c.amount),0), n:cs.length};
+}
+function renderBoard(){
+  const ws=weekStart().getTime(), ds=dayStart().getTime();
+  const openByUser={};entries.forEach(e=>{if(!e.clock_out)openByUser[e.user_id]=e;});
+  const onNow=roster.filter(u=>openByUser[u.id]);
+  $("#wn_count").textContent=onNow.length;
+  $("#working_now").innerHTML = onNow.length? onNow.map(u=>{
+    const e=openByUser[u.id];
+    return `<div class="wn-card on"><div class="row"><div class="avatar" style="background:${colorFor(u)}">${initials(u.full_name)}</div><div><div style="font-weight:600">${u.full_name}</div><div class="muted" style="font-size:12px">in since ${new Date(e.clock_in).toLocaleTimeString([],{hour:"numeric",minute:"2-digit"})}</div></div></div><div class="wn-timer" data-live-since="${new Date(e.clock_in).getTime()}">${fmtHM(Date.now()-new Date(e.clock_in).getTime())}</div></div>`;
+  }).join("") : `<div class="muted" style="padding:8px 2px">Nobody is clocked in right now.</div>`;
+  const tb=$("#team_tbl").querySelector("tbody");
+  tb.innerHTML=roster.map(u=>{
+    const on=!!openByUser[u.id];const d=statsFor(u.id,ds),w=statsFor(u.id,ws);
+    return `<tr><td><div class="row"><div class="avatar" style="background:${colorFor(u)};width:28px;height:28px;font-size:11px">${initials(u.full_name)}</div>${u.full_name}</div></td>
+      <td>${on?'<span class="pill live">● on the clock</span>':'<span class="pill">off</span>'}</td>
+      <td class="num">${hrs(d.h)}</td><td class="num">${hrs(w.h)}</td><td class="num">${w.comm?money(w.comm):'—'}</td></tr>`;
+  }).join("")||`<tr><td colspan="5" class="muted" style="padding:18px">No team members yet.</td></tr>`;
+}
+function renderLeaderboard(){
+  const since=lbMode==="today"?dayStart().getTime():weekStart().getTime();
+  const rows=roster.map(u=>({u,...statsFor(u.id,since)})).sort((a,b)=>b.comm-a.comm||b.h-a.h);
+  const tb=$("#lb_tbl").querySelector("tbody");
+  tb.innerHTML=rows.map((r,i)=>`<tr><td class="muted">${i+1}</td>
+    <td><div class="row"><div class="avatar" style="background:${colorFor(r.u)};width:28px;height:28px;font-size:11px">${initials(r.u.full_name)}</div>${r.u.full_name}</div></td>
+    <td class="num">${hrs(r.h)}</td><td class="num">${r.n||'—'}</td><td class="num" style="font-weight:700">${r.comm?money(r.comm):'—'}</td></tr>`).join("")||`<tr><td colspan="5" class="muted" style="padding:18px">No data yet.</td></tr>`;
+}
+function renderAdmin(){
+  const tb=$("#ad_tbl").querySelector("tbody");
+  tb.innerHTML=roster.map(u=>`<tr>
+    <td><div class="row"><div class="avatar" style="background:${colorFor(u)};width:26px;height:26px;font-size:11px">${initials(u.full_name)}</div>${u.full_name}</div></td>
+    <td class="muted">${u.team||'—'}</td><td><span class="pill">${u.role}</span></td>
+    <td class="num">${u.hourly_rate?money(u.hourly_rate):'—'}</td><td class="muted">••••</td>
+    <td class="num"><button class="btn ghost" data-edit="${u.id}">Edit</button></td></tr>`).join("");
+  $$("[data-edit]").forEach(b=>b.onclick=()=>openRepModal(roster.find(u=>u.id===b.dataset.edit)));
+  const rt=$("#rate_tbl").querySelector("tbody");
+  rt.innerHTML=rates.map(r=>`<tr><td>${r.label}</td><td class="num" id="rate-${r.appointment_type}">${money(r.amount)}</td>
+    <td class="num"><button class="btn ghost" data-rate="${r.appointment_type}" data-amt="${r.amount}">Edit</button></td></tr>`).join("");
+  $$("[data-rate]").forEach(b=>b.onclick=()=>openRateModal(b.dataset.rate,b.dataset.amt));
+}
+function renderAll(){renderMyClock();renderBoard();renderLeaderboard();if(!$("#t-admin").classList.contains("hide"))renderAdmin();}
+async function refreshAll(){await Promise.all([loadRoster(),loadData()]);renderAll();}
+let rtTimer=null;
+function debouncedRefresh(){clearTimeout(rtTimer);rtTimer=setTimeout(async()=>{await loadData();renderAll();},350);}
+
+// ---------- modals ----------
+function showModal(html){$("#modal_inner").innerHTML=html;$("#modal").classList.add("show");}
+function closeModal(){$("#modal").classList.remove("show");}
+$("#modal").onclick=e=>{if(e.target.id==="modal")closeModal();};
+function openRepModal(u){
+  const edit=!!u;u=u||{full_name:"",team:"inbound",role:"rep",hourly_rate:"",color:""};
+  showModal(`<h3>${edit?"Edit member":"Add team member"}</h3>
+    <label class="fld">Full name</label><input id="m_name" value="${u.full_name||""}" placeholder="Jane Doe"/>
+    <div class="flex" style="margin-top:12px"><div style="flex:1"><label class="fld">Team</label>
+      <select id="m_team"><option value="inbound"${u.team==="inbound"?" selected":""}>Inbound</option><option value="outbound"${u.team==="outbound"?" selected":""}>Outbound</option></select></div>
+      <div style="flex:1"><label class="fld">Role</label>
+      <select id="m_role"><option value="rep"${u.role==="rep"?" selected":""}>Rep</option><option value="manager"${u.role==="manager"?" selected":""}>Manager</option><option value="admin"${u.role==="admin"?" selected":""}>Admin</option></select></div></div>
+    <div class="flex" style="margin-top:12px"><div style="flex:1"><label class="fld">Hourly rate ($)</label><input id="m_rate" type="number" step="0.5" value="${u.hourly_rate||""}" placeholder="optional"/></div>
+      <div style="flex:1"><label class="fld">${edit?"New PIN (blank = keep)":"4-digit PIN"}</label><input id="m_pin" inputmode="numeric" maxlength="6" value="" placeholder="••••"/></div></div>
+    <div class="err" id="m_err" style="text-align:left"></div>
+    <div class="flex between" style="margin-top:18px">
+      ${edit?`<button class="btn red" id="m_del">Remove</button>`:`<span></span>`}
+      <div class="flex"><button class="btn ghost" onclick="closeModal()">Cancel</button><button class="btn primary" id="m_save">${edit?"Save":"Add"}</button></div>
+    </div>`);
+  $("#m_save").onclick=async()=>{
+    const name=$("#m_name").value.trim();const pin=$("#m_pin").value.trim();
+    if(!name){$("#m_err").textContent="Name required.";return;}
+    if(!edit&&pin.length<4){$("#m_err").textContent="Set a 4-digit PIN.";return;}
+    const payload={full_name:name,team:$("#m_team").value,role:$("#m_role").value,hourly_rate:$("#m_rate").value?Number($("#m_rate").value):null};
+    if(pin)payload.pin=pin;
+    try{
+      if(edit){payload.id=u.id;await call("admin",{actor_id:me.id,pin:me.pin,op:"update_rep",payload});}
+      else{await call("admin",{actor_id:me.id,pin:me.pin,op:"add_rep",payload});}
+      closeModal();toast("Saved ✓","good");await refreshAll();renderAdmin();
+    }catch(ex){$("#m_err").textContent=ex.message;}
+  };
+  if(edit){$("#m_del").onclick=async()=>{if(!confirm("Remove "+u.full_name+"? Their past hours stay in records."))return;
+    try{await call("admin",{actor_id:me.id,pin:me.pin,op:"delete_rep",payload:{id:u.id}});closeModal();toast("Removed","good");await refreshAll();renderAdmin();}catch(ex){$("#m_err").textContent=ex.message;}};}
+}
+function openRateModal(type,amt){
+  const r=rates.find(x=>x.appointment_type===type);
+  showModal(`<h3>${r.label} commission</h3>
+    <label class="fld">Amount paid per booked ${r.label.toLowerCase()}</label>
+    <input id="r_amt" type="number" step="1" value="${amt}"/>
+    <div class="err" id="r_err"></div>
+    <div class="flex" style="margin-top:18px;justify-content:flex-end"><button class="btn ghost" onclick="closeModal()">Cancel</button><button class="btn primary" id="r_save">Save</button></div>`);
+  $("#r_save").onclick=async()=>{
+    try{await call("admin",{actor_id:me.id,pin:me.pin,op:"set_rate",payload:{appointment_type:type,amount:Number($("#r_amt").value)}});
+      closeModal();toast("Rate updated ✓","good");await loadData();renderAdmin();
+    }catch(ex){$("#r_err").textContent=ex.message;}
+  };
+}
+
+// ---------- realtime ----------
+function subscribe(){
+  sb.channel("rt-time")
+    .on("postgres_changes",{event:"*",schema:"public",table:"time_entries"},debouncedRefresh)
+    .on("postgres_changes",{event:"*",schema:"public",table:"commissions"},debouncedRefresh)
+    .on("postgres_changes",{event:"*",schema:"public",table:"app_users"},async()=>{await loadRoster();renderAll();})
+    .subscribe(st=>{$("#rt_state").textContent=st==="SUBSCRIBED"?"● live":"○ reconnecting";$("#rt_state").style.color=st==="SUBSCRIBED"?"var(--green)":"var(--amber)";});
+}
+
+// ---------- boot ----------
+(async function(){
+  const saved=localStorage.getItem(LS);
+  if(saved){
+    try{me=JSON.parse(saved);await loadRoster();
+      // verify still valid
+      await call("clock",{user_id:me.id,pin:me.pin,action:"status"});
+      const u=roster.find(x=>x.id===me.id);if(u){me.full_name=u.full_name;me.role=u.role;startApp();return;}
+    }catch(ex){localStorage.removeItem(LS);}
+  }
+  initSignin();
+})();
+</script>
+</body>
+</html>
