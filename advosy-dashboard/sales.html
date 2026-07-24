@@ -1,0 +1,1135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Advosy Growth — Sales (Pestkee)</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+tailwind.config = { theme: { extend: {
+  colors: { brand:{DEFAULT:'#8b5cf6',light:'#a78bfa'}, ink:'#18181b', body:'#3f3f46', muted:'#71717a', line:'#e4e4e7', surface:'#f4f4f5', danger:'#ef4444', ok:'#10b981' },
+  fontFamily: { sans:['ui-sans-serif','system-ui','-apple-system','Segoe UI','sans-serif'] },
+}}};
+</script>
+<style>
+  body{background:#f4f4f5}
+  .inp{width:100%;border:1px solid #e4e4e7;border-radius:8px;padding:8px 12px;font-size:14px;background:#fff}
+  .inp:focus{outline:2px solid #a78bfa;outline-offset:-1px;border-color:#a78bfa}
+  .lbl{display:block;font-size:12px;font-weight:600;color:#71717a;margin-bottom:4px}
+  .card{background:#fff;border:1px solid #e4e4e7;border-radius:14px;padding:20px}
+  .num{width:28px;height:28px;border-radius:9999px;background:#18181b;color:#fff;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center}
+  .seg{border:1px solid #e4e4e7;border-radius:10px;padding:12px;cursor:pointer;transition:.12s}
+  .seg.sel{border-color:#8b5cf6;box-shadow:0 0 0 1px #8b5cf6;background:#faf5ff}
+  .hide{display:none}
+  .spot{border:1px solid #e4e4e7;border-radius:8px;padding:8px 10px;font-size:13px;cursor:pointer}
+  .spot.sel{border-color:#8b5cf6;background:#faf5ff;box-shadow:0 0 0 1px #8b5cf6}
+  .btn{border-radius:8px;font-weight:600;font-size:14px;padding:10px 18px}
+  .btn-p{background:#8b5cf6;color:#fff} .btn-p:hover{background:#a78bfa} .btn-p:disabled{opacity:.5}
+  /* Pricebook panel */
+  #pb{position:fixed;top:12px;left:12px;z-index:50}
+  #pbToggle{display:flex;align-items:center;gap:8px;background:#18181b;color:#fff;border-radius:10px;padding:9px 13px;font-size:13px;font-weight:600;cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,.18)}
+  #pbToggle:hover{background:#27272a}
+  #pbPanel{margin-top:8px;width:min(430px,92vw);max-height:82vh;overflow:auto;background:#fff;border:1px solid #e4e4e7;border-radius:14px;box-shadow:0 12px 40px rgba(0,0,0,.22);padding:14px}
+  #pbPanel.hide{display:none}
+  .pb-chip{font-size:11px;font-weight:600;padding:5px 10px;border-radius:9999px;border:1px solid #e4e4e7;background:#fff;color:#3f3f46;cursor:pointer;white-space:nowrap}
+  .pb-chip.sel{background:#8b5cf6;color:#fff;border-color:#8b5cf6}
+  .pb-tbl{width:100%;border-collapse:collapse;font-size:11.5px;margin-top:6px}
+  .pb-tbl th,.pb-tbl td{border:1px solid #ececef;padding:4px 6px;text-align:right}
+  .pb-tbl th:first-child,.pb-tbl td:first-child{text-align:left}
+  .pb-tbl thead th{background:#faf5ff;color:#18181b;font-weight:700}
+  .pb-tbl tr.grp td{background:#f4f4f5;font-weight:700;color:#18181b;text-align:left}
+  .pb-h{font-weight:800;color:#18181b;font-size:13px;margin:10px 0 2px}
+  .pb-note{font-size:11px;color:#71717a;margin-top:2px}
+  /* Offers panel */
+  #of{position:fixed;top:12px;right:12px;z-index:50;display:flex;flex-direction:column;align-items:flex-end}
+  #ofToggle{display:flex;align-items:center;gap:8px;background:#8b5cf6;color:#fff;border-radius:10px;padding:9px 13px;font-size:13px;font-weight:700;cursor:pointer;box-shadow:0 4px 14px rgba(139,92,246,.35)}
+  #ofToggle:hover{background:#a78bfa}
+  #ofPanel{margin-top:8px;width:min(92vw,max(320px,25vw));max-height:82vh;overflow:auto;background:#fff;border:1px solid #e4e4e7;border-radius:14px;box-shadow:0 12px 40px rgba(0,0,0,.22);padding:14px}
+  #ofPanel.hide{display:none}
+  .of-card{border:1px solid #e4e4e7;border-radius:12px;padding:12px;margin-bottom:10px}
+  .of-card .nm{font-weight:800;color:#18181b;font-size:14px}
+  .of-badge{display:inline-block;font-size:10px;font-weight:700;padding:2px 7px;border-radius:9999px;margin-left:6px;vertical-align:middle}
+  .b-new{background:#ecfdf5;color:#047857} .b-past{background:#eff6ff;color:#1d4ed8} .b-both{background:#faf5ff;color:#7c3aed}
+  .b-off{background:#f4f4f5;color:#71717a}
+  .of-promo{display:inline-block;font-family:ui-monospace,monospace;font-size:11px;font-weight:700;background:#18181b;color:#fff;border-radius:6px;padding:2px 7px;margin-top:6px}
+  .of-grp{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:#71717a;margin:6px 0 6px}
+  /* Leads rail (far-left, under the pricebook) */
+  #leadRail{position:fixed;top:56px;left:0;bottom:0;width:264px;background:#fff;border-right:1px solid #e4e4e7;z-index:40;display:none;flex-direction:column}
+  @media(min-width:1024px){ #leadRail{display:flex} body.has-rail #mainWrap{margin-left:272px;margin-right:0} }
+  body.rail-open #leadRail{display:flex;z-index:60;box-shadow:0 12px 40px rgba(0,0,0,.25)}
+  #leadRail .hd{padding:10px 12px;border-bottom:1px solid #e4e4e7;background:#fafafa}
+  #leadRail .rbody{overflow:auto;flex:1;padding:8px}
+  #leadFilter{display:flex;gap:4px;flex-wrap:wrap;margin-top:8px}
+  .lfch{font-size:10px;font-weight:700;padding:3px 8px;border-radius:9999px;border:1px solid #e4e4e7;background:#fff;color:#3f3f46;cursor:pointer}
+  .lfch.sel{background:#18181b;color:#fff;border-color:#18181b}
+  .lead{border:1px solid #e4e4e7;border-radius:10px;padding:8px 10px;margin-bottom:8px;cursor:pointer}
+  .lead:hover{background:#faf5ff}
+  .lead.sel{border-color:#8b5cf6;box-shadow:0 0 0 1px #8b5cf6;background:#faf5ff}
+  .lead .nm{font-weight:700;color:#18181b;font-size:13px;line-height:1.15}
+  .lch{display:inline-block;font-size:10px;font-weight:700;padding:1px 7px;border-radius:9999px}
+  .lch.Facebook{background:#eff6ff;color:#1d4ed8}
+  .lch.Thumbtack{background:#ecfdf5;color:#047857}
+  .lch.web{background:#fef3c7;color:#92400e}
+  .lch.Other{background:#f4f4f5;color:#71717a}
+  #leadOpen{position:fixed;left:12px;bottom:12px;z-index:55;background:#18181b;color:#fff;border-radius:10px;padding:9px 13px;font-size:13px;font-weight:700;cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,.2)}
+  @media(min-width:1024px){ #leadOpen{display:none} }
+</style>
+</head>
+<body class="font-sans text-body antialiased has-rail">
+
+<!-- Leads rail (far left, under the pricebook) -->
+<div id="leadRail">
+  <div class="hd">
+    <div class="flex items-center justify-between">
+      <div class="font-extrabold text-ink text-sm">Leads · GoHighLevel</div>
+      <button id="leadRefresh" class="text-xs font-semibold text-brand">Refresh</button>
+    </div>
+    <div id="leadFilter"></div>
+  </div>
+  <div class="rbody" id="leadList"><div class="text-sm text-muted p-2">Loading leads…</div></div>
+</div>
+<button id="leadOpen">☰ Leads</button>
+
+<!-- Collapsible Pestkee Pricebook -->
+<div id="pb">
+  <div id="pbToggle"><span>📖</span><span>Pestkee Pricebook</span><span id="pbCaret">▸</span></div>
+  <div id="pbPanel" class="hide">
+    <div class="flex items-center justify-between mb-2">
+      <div class="font-extrabold text-ink text-sm">Pricebook — quick reference</div>
+      <button id="pbClose" class="text-muted text-lg leading-none">×</button>
+    </div>
+    <div id="pbChips" class="flex flex-wrap gap-1.5 mb-1"></div>
+    <div id="pbBody"></div>
+  </div>
+</div>
+
+<!-- Collapsible Offers -->
+<div id="of">
+  <div id="ofToggle"><span>🎁</span><span>Current Offers</span><span id="ofCaret">▸</span></div>
+  <div id="ofPanel" class="hide">
+    <div class="flex items-center justify-between mb-2">
+      <div class="font-extrabold text-ink text-sm">Offers &amp; promos</div>
+      <div class="flex items-center gap-2">
+        <button id="ofAdd" class="text-xs font-semibold text-brand">+ Add offer</button>
+        <button id="ofClose" class="text-muted text-lg leading-none">×</button>
+      </div>
+    </div>
+
+    <!-- Add / edit form -->
+    <div id="ofForm" class="hide border border-line rounded-xl p-3 mb-3 bg-surface">
+      <input type="hidden" id="of_id" />
+      <label class="lbl">Offer name *</label><input id="of_name" class="inp mb-2" placeholder="e.g. Safe Switch" />
+      <label class="lbl">Audience</label>
+      <select id="of_audience" class="inp mb-2"><option value="new">New customers</option><option value="past">Past clients</option><option value="both">Both</option></select>
+      <label class="lbl">Headline</label><input id="of_headline" class="inp mb-2" placeholder="Short pitch" />
+      <label class="lbl">Details</label><textarea id="of_details" class="inp mb-2" rows="3" placeholder="What's included / terms"></textarea>
+      <label class="lbl">Discount / value</label><input id="of_discount" class="inp mb-2" placeholder="e.g. 50% off first service" />
+      <label class="lbl">Promo code</label><input id="of_promo" class="inp mb-2" placeholder="optional" />
+      <div class="grid grid-cols-2 gap-2">
+        <div><label class="lbl">Valid from</label><input id="of_from" type="date" class="inp mb-2" /></div>
+        <div><label class="lbl">Valid to</label><input id="of_to" type="date" class="inp mb-2" /></div>
+      </div>
+      <label class="flex items-center gap-2 text-sm text-body cursor-pointer mb-3"><input type="checkbox" id="of_active" checked class="w-4 h-4 accent-brand" /> Active</label>
+      <div id="of_err" class="text-xs text-danger mb-2 h-4"></div>
+      <div class="flex gap-2">
+        <button id="ofSave" class="btn btn-p" style="padding:8px 14px">Save offer</button>
+        <button id="ofCancel" class="btn" style="padding:8px 14px;border:1px solid #e4e4e7;background:#fff">Cancel</button>
+      </div>
+    </div>
+
+    <div id="ofList" class="text-sm text-muted">Loading…</div>
+  </div>
+</div>
+
+<div id="mainWrap" class="max-w-4xl mx-auto px-4 md:px-6 py-6 pb-40" style="padding-top:52px">
+
+  <div class="flex items-center justify-between mb-1">
+    <div>
+      <p class="uppercase text-xs font-semibold text-brand tracking-wide">Advosy Growth · Pestkee</p>
+      <h1 class="text-2xl font-bold text-ink">New Sale</h1>
+    </div>
+    <div class="text-right text-xs text-muted">
+      <div id="repName">—</div>
+      <div id="optStatus" class="mt-0.5"></div>
+    </div>
+  </div>
+  <p class="text-sm text-body mb-4">Set up, sell, and schedule a pest control customer without leaving the dashboard.</p>
+
+  <!-- Mode switch + clear -->
+  <div class="flex items-center justify-between gap-3 mb-6 flex-wrap">
+    <div class="inline-flex bg-white border border-line rounded-lg p-1">
+      <button id="mSale" class="px-4 py-1.5 rounded-md text-sm font-semibold bg-brand text-white">New Sale</button>
+      <button id="mCust" class="px-4 py-1.5 rounded-md text-sm font-semibold text-body">Customer Accounts</button>
+    </div>
+    <button id="clearForm" class="px-4 py-1.5 rounded-md text-sm font-semibold border border-line bg-white text-body hover:bg-surface">Clear all fields</button>
+  </div>
+
+  <div id="saleMode">
+
+  <!-- 1. Customer -->
+  <div class="card mb-5">
+    <div class="flex items-center gap-3 mb-4"><span class="num">1</span><h2 class="text-lg font-bold text-ink">Customer</h2></div>
+
+    <!-- Live dedup lookup -->
+    <div class="relative mb-4">
+      <label class="lbl">Check for an existing customer (name, phone, or email)</label>
+      <input id="dedup" class="inp" placeholder="Search the live FieldRoutes database before creating…" autocomplete="off" />
+      <div id="dedupResults" class="absolute z-30 mt-1 w-full bg-white border border-line rounded-md shadow-lg max-h-64 overflow-auto hide"></div>
+    </div>
+    <div id="linkedBanner" class="hide items-center justify-between bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2 mb-4 text-sm">
+      <span id="linkedText" class="text-emerald-800 font-medium"></span>
+      <button id="unlink" class="text-xs font-semibold text-emerald-700 underline">Unlink</button>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div><label class="lbl">First name *</label><input id="firstName" class="inp" /></div>
+      <div><label class="lbl">Last name</label><input id="lastName" class="inp" /></div>
+      <div><label class="lbl">Phone</label><input id="phone" class="inp" inputmode="tel" placeholder="(480) 555-0134" /></div>
+      <div><label class="lbl">Email</label><input id="email" class="inp" inputmode="email" /></div>
+    </div>
+    <div class="mt-4 relative">
+      <label class="lbl">Service address</label>
+      <input id="addr" class="inp" placeholder="Start typing an AZ or NV address…" autocomplete="off" />
+      <div id="addrResults" class="absolute z-30 mt-1 w-full bg-white border border-line rounded-md shadow-lg max-h-56 overflow-auto hide"></div>
+    </div>
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mt-3">
+      <div><label class="lbl">City</label><input id="city" class="inp" /></div>
+      <div><label class="lbl">State</label><input id="state" class="inp" maxlength="2" /></div>
+      <div><label class="lbl">ZIP</label><input id="zip" class="inp" inputmode="numeric" /></div>
+      <div><label class="lbl">Lead source</label><select id="sourceID" class="inp"><option value="">—</option></select></div>
+    </div>
+    <div class="mt-3"><label class="lbl">Notes</label><textarea id="notes" class="inp" rows="2" placeholder="Anything the tech should know (pests, pets, gate code, access)…"></textarea></div>
+  </div>
+
+  <!-- 2. Plan & pricing -->
+  <div class="card mb-5">
+    <div class="flex items-center gap-3 mb-4"><span class="num">2</span><h2 class="text-lg font-bold text-ink">Plan &amp; pricing</h2></div>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div class="md:col-span-2"><label class="lbl">Plan (subscription) *</label><select id="plan" class="inp"><option value="">Loading plans…</option></select></div>
+      <div><label class="lbl">Initial / first service ($)</label><input id="initialCharge" class="inp" inputmode="decimal" /></div>
+      <div><label class="lbl">Recurring service ($)</label><input id="serviceCharge" class="inp" inputmode="decimal" placeholder="0 for one-time" /></div>
+      <div>
+        <label class="lbl">Service interval</label>
+        <select id="frequency" class="inp">
+          <option value="30">Monthly (30 days)</option>
+          <option value="60">Bi-monthly (60 days)</option>
+          <option value="90" selected>Quarterly (90 days)</option>
+          <option value="180">Semi-annual (180 days)</option>
+          <option value="365">Annual (365 days)</option>
+          <option value="-1">One-time (no recurrence)</option>
+        </select>
+      </div>
+      <div><label class="lbl">Agreement length (months)</label><input id="agreement" class="inp" inputmode="numeric" placeholder="e.g. 12" /></div>
+      <div><label class="lbl">Sold by (FieldRoutes rep)</label><select id="soldBy" class="inp"><option value="">—</option></select></div>
+      <div><label class="lbl">PO number (optional)</label><input id="poNumber" class="inp" /></div>
+    </div>
+    <div class="mt-4">
+      <div class="flex items-center justify-between mb-2"><label class="lbl mb-0">Add-ons (optional)</label><button type="button" id="addAddon" class="text-xs font-semibold text-brand">+ Add line item</button></div>
+      <div id="addons" class="space-y-2"></div>
+    </div>
+  </div>
+
+  <!-- 3. Billing -->
+  <div class="card mb-5">
+    <div class="flex items-center gap-3 mb-4"><span class="num">3</span><h2 class="text-lg font-bold text-ink">Billing method</h2></div>
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div class="seg sel" data-bill="paylink"><div class="font-semibold text-ink text-sm">Pay-link</div><div class="text-xs text-muted mt-0.5">Customer adds their own card — safest</div></div>
+      <div class="seg" data-bill="card"><div class="font-semibold text-ink text-sm">Card now</div><div class="text-xs text-muted mt-0.5">Rep enters card on file</div></div>
+      <div class="seg" data-bill="ach"><div class="font-semibold text-ink text-sm">Bank / ACH</div><div class="text-xs text-muted mt-0.5">Checking / savings</div></div>
+      <div class="seg" data-bill="none"><div class="font-semibold text-ink text-sm">Skip for now</div><div class="text-xs text-muted mt-0.5">Add billing later</div></div>
+    </div>
+
+    <div id="billPaylink" class="mt-4 text-sm text-body bg-surface rounded-lg p-3">
+      After the sale, the customer receives a secure link to add their own card or bank — no card data touches this app.
+    </div>
+
+    <div id="billCard" class="mt-4 hide">
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div class="md:col-span-2"><label class="lbl">Name on card</label><input id="c_name" class="inp" /></div>
+        <div class="md:col-span-2"><label class="lbl">Card number</label><input id="c_number" class="inp" inputmode="numeric" autocomplete="off" /></div>
+        <div><label class="lbl">Exp month</label><input id="c_month" class="inp" inputmode="numeric" placeholder="MM" maxlength="2" /></div>
+        <div><label class="lbl">Exp year</label><input id="c_year" class="inp" inputmode="numeric" placeholder="YYYY" maxlength="4" /></div>
+        <div><label class="lbl">CVV</label><input id="c_cvv" class="inp" inputmode="numeric" maxlength="4" autocomplete="off" /></div>
+        <div><label class="lbl">Billing ZIP</label><input id="c_zip" class="inp" inputmode="numeric" /></div>
+      </div>
+      <p class="text-xs text-muted mt-2">Card data is sent server-side to FieldRoutes and never stored here. If your gateway blocks API card entry, we fall back to a pay-link automatically.</p>
+    </div>
+
+    <div id="billAch" class="mt-4 hide">
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div><label class="lbl">Name on account</label><input id="a_name" class="inp" /></div>
+        <div><label class="lbl">Bank name</label><input id="a_bank" class="inp" /></div>
+        <div><label class="lbl">Routing number</label><input id="a_routing" class="inp" inputmode="numeric" /></div>
+        <div><label class="lbl">Account number</label><input id="a_account" class="inp" inputmode="numeric" autocomplete="off" /></div>
+        <div><label class="lbl">Account type</label><select id="a_type" class="inp"><option value="0">Personal</option><option value="1">Business</option></select></div>
+      </div>
+    </div>
+
+    <label id="autopayWrap" class="hide items-center gap-2 mt-3 text-sm text-body cursor-pointer" style="display:none">
+      <input type="checkbox" id="autopay" checked class="w-4 h-4 accent-brand" /> Enroll in autopay
+    </label>
+  </div>
+
+  <!-- 4. Agreement -->
+  <div class="card mb-5">
+    <div class="flex items-center justify-between mb-4">
+      <div class="flex items-center gap-3"><span class="num">4</span><h2 class="text-lg font-bold text-ink">Service agreement</h2></div>
+      <button type="button" id="tplAdd" class="text-xs font-semibold text-brand">+ Add template</button>
+    </div>
+    <label class="lbl">Agreement template</label>
+    <select id="agTemplate" class="inp mb-3"><option value="">Loading templates…</option></select>
+
+    <div id="tplForm" class="hide border border-line rounded-xl p-3 mb-3 bg-surface">
+      <label class="lbl">Template name *</label><input id="tpl_name" class="inp mb-2" placeholder="e.g. Annual Agreement" />
+      <label class="lbl">FieldRoutes document type ID (optional)</label>
+      <input id="tpl_doc" class="inp mb-1" inputmode="numeric" placeholder="Leave blank to use the FieldRoutes default template" />
+      <p class="text-xs text-muted mb-2">Fill this in once the template exists in FieldRoutes so the right document is sent. Blank = default.</p>
+      <div id="tpl_err" class="text-xs text-danger mb-2 h-4"></div>
+      <div class="flex gap-2"><button type="button" id="tplSave" class="btn btn-p" style="padding:8px 14px">Save template</button><button type="button" id="tplCancel" class="btn" style="padding:8px 14px;border:1px solid #e4e4e7;background:#fff">Cancel</button></div>
+    </div>
+
+    <label class="flex items-center gap-2 text-sm text-body cursor-pointer">
+      <input type="checkbox" id="sendAgreement" checked class="w-4 h-4 accent-brand" />
+      Email the customer the selected agreement for e-signature (FieldRoutes)
+    </label>
+  </div>
+
+  <!-- 5. First appointment -->
+  <div class="card mb-5">
+    <div class="flex items-center gap-3 mb-3"><span class="num">5</span><h2 class="text-lg font-bold text-ink">First service appointment</h2></div>
+    <label class="flex items-center gap-2 text-sm text-body cursor-pointer mb-3">
+      <input type="checkbox" id="wantAppt" class="w-4 h-4 accent-brand" />
+      Schedule the initial / flush-out service now
+    </label>
+    <div id="apptBox" class="hide">
+      <div class="flex items-end gap-3 mb-3">
+        <div><label class="lbl">Search days ahead</label>
+          <select id="apptDays" class="inp"><option value="7">Next 7 days</option><option value="14" selected>Next 14 days</option><option value="30">Next 30 days</option></select>
+        </div>
+        <button type="button" id="loadSlots" class="btn btn-p">Find open times</button>
+        <span id="slotStatus" class="text-xs text-muted mb-2"></span>
+      </div>
+      <div id="slots" class="grid grid-cols-2 md:grid-cols-3 gap-2"></div>
+    </div>
+  </div>
+
+  <!-- Result -->
+  <div id="result" class="hide"></div>
+
+  <!-- Recent sales -->
+  <div class="card mb-5">
+    <div class="flex items-center justify-between mb-3"><h2 class="text-lg font-bold text-ink">Recent sales</h2><button id="refreshRecent" class="text-xs font-semibold text-brand">Refresh</button></div>
+    <div id="recent" class="text-sm text-muted">Loading…</div>
+  </div>
+
+  </div><!-- /saleMode -->
+
+  <!-- Customer Accounts mode -->
+  <div id="custMode" class="hide">
+    <div class="card mb-5">
+      <div class="flex items-center gap-3 mb-4"><span class="num">🔍</span><h2 class="text-lg font-bold text-ink">Find a customer</h2></div>
+      <div class="flex gap-2">
+        <input id="cSearch" class="inp" placeholder="Name, phone, or email…" />
+        <button id="cSearchBtn" class="btn btn-p whitespace-nowrap">Search</button>
+      </div>
+      <div id="cResults" class="mt-3"></div>
+    </div>
+    <div id="cDetail"></div>
+  </div>
+
+</div>
+
+<!-- Sticky submit bar -->
+<div class="fixed bottom-0 inset-x-0 bg-white border-t border-line">
+  <div class="max-w-4xl mx-auto px-4 md:px-6 py-3 flex items-center gap-4">
+    <div class="text-sm">
+      <span class="text-muted">Today </span><span id="sumInitial" class="font-bold text-ink">$0</span>
+      <span class="text-muted ml-3">Recurring </span><span id="sumRecur" class="font-bold text-ink">$0</span>
+    </div>
+    <div id="submitMsg" class="text-xs text-danger ml-auto"></div>
+    <button id="submit" class="btn btn-p ml-auto">Complete sale</button>
+  </div>
+</div>
+
+<script>
+const SUPA_URL = "https://andzztvmaleiefxcfjwh.supabase.co";
+const ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFuZHp6dHZtYWxlaWVmeGNmandoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3OTA3OTMsImV4cCI6MjA5NzM2Njc5M30.3C9YUDfVmZmLRV__Jd5DBfzr14-zJXsVHJIp8z2u43Y";
+const OFFICE = "1";
+const $ = s => document.querySelector(s);
+const money = n => '$' + Number(n||0).toLocaleString(undefined,{maximumFractionDigits:2});
+
+let rep = {}; try { rep = JSON.parse(localStorage.getItem('advosy_rep')||'{}'); } catch(e){}
+$('#repName').textContent = rep.full_name ? ('Rep: ' + rep.full_name) : 'Not signed in';
+
+let billMethod = 'paylink';
+let chosenSpot = null;
+let plans = [];
+
+/* ---- API ---- */
+async function api(body){
+  const r = await fetch(`${SUPA_URL}/functions/v1/sales`,{method:'POST',
+    headers:{'Content-Type':'application/json','Authorization':'Bearer '+ANON,'apikey':ANON},
+    body:JSON.stringify(body)});
+  const j = await r.json();
+  if(!r.ok) throw new Error(j.error||('HTTP '+r.status));
+  return j;
+}
+async function placesCall(payload){
+  const r=await fetch(`${SUPA_URL}/functions/v1/places`,{method:'POST',
+    headers:{'Content-Type':'application/json','Authorization':'Bearer '+ANON,'apikey':ANON},
+    body:JSON.stringify(payload)});
+  if(!r.ok) throw new Error('places '+r.status); return await r.json();
+}
+
+/* ---- Load live options ---- */
+async function loadOptions(){
+  $('#optStatus').textContent = 'Loading live FieldRoutes data…';
+  try{
+    const o = await api({action:'options', officeID:OFFICE});
+    plans = o.plans||[];
+    const planSel = $('#plan');
+    planSel.innerHTML = '<option value="">Select a plan…</option>' +
+      plans.map((p,i)=>`<option value="${i}">${escapeHtml(p.name)}${p.serviceCharge?(' — '+money(p.serviceCharge)):''}</option>`).join('');
+    const srcSel = $('#sourceID');
+    srcSel.innerHTML = '<option value="">—</option>' + (o.sources||[]).map(s=>`<option value="${s.sourceID}" data-name="${escapeHtml(s.name)}">${escapeHtml(s.name)}</option>`).join('');
+    const empSel = $('#soldBy');
+    empSel.innerHTML = '<option value="">—</option>' + (o.employees||[]).map(e=>`<option value="${e.employeeID}">${escapeHtml(e.name)}</option>`).join('');
+    // Default "sold by" to the signed-in rep if a name matches.
+    if(rep.full_name){ const match=(o.employees||[]).find(e=>e.name.toLowerCase()===rep.full_name.toLowerCase()); if(match) empSel.value=match.employeeID; }
+    const errs = Object.values(o.errors||{}).filter(Boolean);
+    $('#optStatus').textContent = errs.length ? ('⚠ '+errs.length+' lookup issue(s)') : ('Loaded '+plans.length+' plans');
+    $('#optStatus').className = 'mt-0.5 ' + (errs.length?'text-danger':'text-ok');
+  }catch(e){
+    $('#optStatus').textContent = '⚠ Could not load plans: '+e.message;
+    $('#optStatus').className='mt-0.5 text-danger';
+  }
+}
+function escapeHtml(s){ return String(s==null?'':s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+/* ---- Plan select autofills pricing ---- */
+$('#plan').addEventListener('change', e=>{
+  const p = plans[e.target.value]; if(!p) return;
+  if(p.initialCharge!=null) $('#initialCharge').value = p.initialCharge;
+  if(p.serviceCharge!=null) $('#serviceCharge').value = p.serviceCharge;
+  if(p.frequencyDays!=null){ const f=String(p.frequencyDays); if([...$('#frequency').options].some(o=>o.value===f)) $('#frequency').value=f; }
+  updateTotals();
+});
+['#initialCharge','#serviceCharge'].forEach(s=>$(s).addEventListener('input', updateTotals));
+function updateTotals(){
+  $('#sumInitial').textContent = money($('#initialCharge').value||0);
+  const rec = Number($('#serviceCharge').value||0);
+  $('#sumRecur').textContent = rec>0 ? money(rec) : '$0';
+}
+
+/* ---- Add-ons ---- */
+$('#addAddon').addEventListener('click', ()=>{
+  const row = document.createElement('div');
+  row.className='grid grid-cols-12 gap-2 items-center';
+  row.innerHTML = `
+    <input class="inp col-span-6 ad-desc" placeholder="Add-on description" />
+    <input class="inp col-span-3 ad-amt" inputmode="decimal" placeholder="$" />
+    <label class="col-span-2 flex items-center gap-1 text-xs text-muted"><input type="checkbox" class="ad-rec w-4 h-4 accent-brand" />Recurring</label>
+    <button type="button" class="col-span-1 text-danger text-lg leading-none ad-del">×</button>`;
+  row.querySelector('.ad-del').onclick=()=>row.remove();
+  $('#addons').appendChild(row);
+});
+
+/* ---- Billing segmented control ---- */
+document.querySelectorAll('[data-bill]').forEach(el=>{
+  el.addEventListener('click', ()=>{
+    document.querySelectorAll('[data-bill]').forEach(x=>x.classList.remove('sel'));
+    el.classList.add('sel'); billMethod = el.dataset.bill;
+    $('#billPaylink').classList.toggle('hide', billMethod!=='paylink');
+    $('#billCard').classList.toggle('hide', billMethod!=='card');
+    $('#billAch').classList.toggle('hide', billMethod!=='ach');
+    $('#autopayWrap').style.display = (billMethod==='card'||billMethod==='ach') ? 'flex' : 'none';
+  });
+});
+
+/* ---- Address autocomplete (Google Places via Edge fn, Photon fallback) ---- */
+const AZNV_BBOX='-120.2,31.2,-108.9,42.1';
+let addrT=null;
+$('#addr').addEventListener('input', e=>{
+  const v=e.target.value; if(addrT) clearTimeout(addrT);
+  if(v.trim().length<3){ $('#addrResults').classList.add('hide'); return; }
+  addrT=setTimeout(async()=>{
+    let out=[];
+    try{ const d=await placesCall({op:'autocomplete', input:v}); out=(d.predictions||[]).map(p=>({placeId:p.placeId, description:p.description})); }catch(_){}
+    if(!out.length){ try{ out=await photon(v); }catch(_){} }
+    renderAddr(out);
+  },280);
+});
+async function photon(v){
+  const r=await fetch(`https://photon.komoot.io/api/?q=${encodeURIComponent(v)}&limit=8&lang=en&lat=35.5&lon=-113&bbox=${AZNV_BBOX}`);
+  const d=await r.json(); const out=[];
+  for(const f of (d.features||[])){ const p=f.properties||{};
+    if(p.countrycode!=='US') continue;
+    const street=[p.housenumber,p.street||p.name].filter(Boolean).join(' ');
+    const city=p.city||p.town||p.village||p.county||''; const st=(p.state||'').slice(0,2); const zip=p.postcode||'';
+    const formatted=[street,city,[st,zip].filter(Boolean).join(' ')].filter(Boolean).join(', ');
+    if(street&&formatted) out.push({description:formatted, comps:{street,city,state:p.state,zip}});
+  }
+  return out;
+}
+function renderAddr(list){
+  const box=$('#addrResults');
+  if(!list.length){ box.classList.add('hide'); return; }
+  box.innerHTML=list.map((r,i)=>`<button type="button" data-i="${i}" class="block w-full text-left px-3 py-2 text-sm text-ink hover:bg-surface border-b border-line last:border-0">${escapeHtml(r.description)}</button>`).join('');
+  box.classList.remove('hide');
+  box.querySelectorAll('button').forEach(b=>b.onmousedown=()=>chooseAddr(list[+b.dataset.i]));
+}
+async function chooseAddr(r){
+  $('#addrResults').classList.add('hide');
+  if(r.comps){ fillAddr(r.description, r.comps); return; }
+  $('#addr').value=r.description;
+  try{ const d=await placesCall({op:'details', place_id:r.placeId}); if(d&&d.formatted){ fillAddr(d.formatted,{street:d.street,city:d.city,state:d.state,zip:d.zip}); return; } }catch(_){}
+  fillAddr(r.description,{});
+}
+function fillAddr(formatted,c){
+  $('#addr').value = c.street || formatted;
+  if(c.city) $('#city').value=c.city;
+  if(c.state) $('#state').value=(c.state.length>2?({Arizona:'AZ',Nevada:'NV'}[c.state]||c.state):c.state);
+  if(c.zip) $('#zip').value=c.zip;
+}
+document.addEventListener('click', e=>{ if(!e.target.closest('#addr')&&!e.target.closest('#addrResults')) $('#addrResults').classList.add('hide'); });
+
+/* ---- First appointment ---- */
+$('#wantAppt').addEventListener('change', e=>$('#apptBox').classList.toggle('hide', !e.target.checked));
+$('#loadSlots').addEventListener('click', async ()=>{
+  $('#slotStatus').textContent='Searching…'; $('#slots').innerHTML=''; chosenSpot=null;
+  try{
+    const days=Number($('#apptDays').value);
+    const now=Date.now();
+    const o=await api({action:'availability', officeID:OFFICE, start_date:now, end_date:now+days*86400000});
+    if(!o.slots || !o.slots.length){ $('#slotStatus').textContent='No open API-schedulable spots in that window.'; return; }
+    $('#slotStatus').textContent=o.slots.length+' open';
+    $('#slots').innerHTML='';
+    o.slots.slice(0,60).forEach(s=>{
+      const d=new Date(s.start);
+      const label=d.toLocaleDateString(undefined,{weekday:'short',month:'short',day:'numeric'})+' · '+d.toLocaleTimeString(undefined,{hour:'numeric',minute:'2-digit'});
+      const el=document.createElement('div'); el.className='spot';
+      el.innerHTML=`<div class="font-semibold text-ink">${label}</div><div class="text-xs text-muted">${escapeHtml(s.assignedRep||'Route')}</div>`;
+      el.onclick=()=>{ document.querySelectorAll('#slots .spot').forEach(x=>x.classList.remove('sel')); el.classList.add('sel'); chosenSpot=s; };
+      $('#slots').appendChild(el);
+    });
+  }catch(e){ $('#slotStatus').textContent='Error: '+e.message; }
+});
+
+/* ---- Submit ---- */
+$('#submit').addEventListener('click', submitSale);
+async function submitSale(){
+  $('#submitMsg').textContent='';
+  const first=$('#firstName').value.trim();
+  const planIdx=$('#plan').value;
+  const linkedId=window.__existingCustomerID||'';
+  if(!first && !linkedId){ $('#submitMsg').textContent='Enter the customer first name.'; return; }
+  if(planIdx===''){ $('#submitMsg').textContent='Choose a plan.'; return; }
+  const plan=plans[planIdx];
+  const srcOpt=$('#sourceID').selectedOptions[0];
+
+  const payload = {
+    action:'create', officeID:OFFICE,
+    rep:{ id:rep.id||null, name:rep.full_name||null },
+    customer:{
+      existingCustomerID: linkedId||undefined,
+      firstName:first, lastName:$('#lastName').value.trim(),
+      phone:$('#phone').value.trim(), email:$('#email').value.trim(),
+      street:$('#addr').value.trim(), city:$('#city').value.trim(), state:$('#state').value.trim(), zip:$('#zip').value.trim(),
+      sourceID:$('#sourceID').value||undefined, sourceLabel:srcOpt?srcOpt.dataset.name:undefined,
+    },
+    subscription:{
+      serviceID:plan.serviceID,
+      frequencyDays:Number($('#frequency').value),
+      initialCharge:Number($('#initialCharge').value||0),
+      serviceCharge:Number($('#serviceCharge').value||0),
+      agreementLengthMonths:$('#agreement').value?Number($('#agreement').value):undefined,
+      soldByEmployeeID:$('#soldBy').value||undefined,
+      poNumber:$('#poNumber').value.trim()||undefined,
+      addons:[...document.querySelectorAll('#addons > div')].map(r=>({
+        description:r.querySelector('.ad-desc').value.trim(),
+        amount:Number(r.querySelector('.ad-amt').value||0),
+        isRecurring:r.querySelector('.ad-rec').checked,
+      })).filter(a=>a.description),
+    },
+    billing: buildBilling(),
+    agreement: buildAgreement(),
+    notes:$('#notes').value.trim()||undefined,
+  };
+  if($('#wantAppt').checked && chosenSpot){
+    payload.appointment={ schedule:true, spotID:chosenSpot.spotID, start:chosenSpot.start, end:chosenSpot.end, employeeID:chosenSpot.assignedTech, assignedRep:chosenSpot.assignedRep };
+  } else if($('#wantAppt').checked && !chosenSpot){
+    $('#submitMsg').textContent='Pick an appointment time or turn off scheduling.'; return;
+  }
+
+  const btn=$('#submit'); btn.disabled=true; btn.textContent='Processing…';
+  try{
+    const res=await api(payload);
+    showResult(res);
+    loadRecent();
+    window.scrollTo({top:document.body.scrollHeight,behavior:'smooth'});
+  }catch(e){ $('#submitMsg').textContent='Sale failed: '+e.message; }
+  finally{ btn.disabled=false; btn.textContent='Complete sale'; }
+}
+function buildAgreement(){
+  const sel=$('#agTemplate');
+  const tpl=(window.__templates||[]).find(t=>t.id===(sel&&sel.value));
+  return { send:$('#sendAgreement').checked, templateId:tpl?tpl.id:undefined, templateName:tpl?tpl.name:undefined, contractParams:tpl?tpl.fr_params:undefined };
+}
+function buildBilling(){
+  const b={ method:billMethod, autopay:$('#autopay').checked };
+  if(billMethod==='card'){
+    Object.assign(b,{ billingName:$('#c_name').value.trim(), cardNumber:$('#c_number').value.trim(),
+      expMonth:$('#c_month').value.trim(), expYear:$('#c_year').value.trim(), cvv:$('#c_cvv').value.trim(), billingZip:$('#c_zip').value.trim() });
+  } else if(billMethod==='ach'){
+    Object.assign(b,{ billingName:$('#a_name').value.trim(), bankName:$('#a_bank').value.trim(),
+      routingNumber:$('#a_routing').value.trim(), accountNumber:$('#a_account').value.trim(), checkType:Number($('#a_type').value) });
+  }
+  return b;
+}
+function showResult(r){
+  const box=$('#result'); box.classList.remove('hide');
+  const warn=(r.warnings||[]).concat([r.billingError&&('Billing: '+r.billingError), r.contractError&&('Agreement: '+r.contractError), r.appointmentError&&('Appointment: '+r.appointmentError)].filter(Boolean));
+  box.innerHTML=`
+    <div class="card mb-5" style="border-color:#10b981">
+      <div class="flex items-center gap-2 mb-3"><span style="width:28px;height:28px;border-radius:9999px;background:#10b981;color:#fff;display:flex;align-items:center;justify-content:center">✓</span><h2 class="text-lg font-bold text-ink">Sale complete</h2></div>
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+        <div><div class="text-muted text-xs">Customer ID</div><div class="font-semibold text-ink">${escapeHtml(r.customerID)}</div></div>
+        <div><div class="text-muted text-xs">Subscription ID</div><div class="font-semibold text-ink">${escapeHtml(r.subscriptionID)}</div></div>
+        <div><div class="text-muted text-xs">Agreement</div><div class="font-semibold text-ink">${r.contractSent?'Emailed ✓':'Not sent'}</div></div>
+        <div><div class="text-muted text-xs">First appt</div><div class="font-semibold text-ink">${r.appointmentID?('Booked ✓'):(r.appointmentError?'Failed':'—')}</div></div>
+      </div>
+      ${r.payLinkUrl?`<div class="mt-3 text-sm">Pay-link / portal: <a href="${escapeHtml(r.payLinkUrl)}" target="_blank" class="text-brand font-semibold underline">${escapeHtml(r.payLinkUrl)}</a></div>`:''}
+      ${r.contractLink?`<div class="mt-1 text-sm">Agreement link: <a href="${escapeHtml(r.contractLink)}" target="_blank" class="text-brand font-semibold underline">open</a></div>`:''}
+      ${warn.length?`<div class="mt-3 text-xs" style="color:#b45309">${warn.map(w=>'⚠ '+escapeHtml(w)).join('<br>')}</div>`:''}
+      <button onclick="location.reload()" class="btn btn-p mt-4">Start another sale</button>
+    </div>`;
+}
+
+/* ---- Recent sales ---- */
+async function loadRecent(){
+  try{
+    const r=await fetch(`${SUPA_URL}/rest/v1/sales_log?select=created_at,customer_name,initial_charge,service_charge,billing_method,contract_sent,rep_name&order=created_at.desc&limit=10`,
+      {headers:{apikey:ANON,Authorization:'Bearer '+ANON}});
+    const rows=await r.json();
+    if(!Array.isArray(rows)||!rows.length){ $('#recent').textContent='No sales logged yet.'; return; }
+    $('#recent').innerHTML='<div class="divide-y divide-line">'+rows.map(x=>{
+      const d=new Date(x.created_at).toLocaleDateString(undefined,{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'});
+      return `<div class="py-2 flex items-center justify-between"><div><span class="font-semibold text-ink">${escapeHtml(x.customer_name||'—')}</span><span class="text-xs text-muted ml-2">${escapeHtml(x.rep_name||'')}</span></div>
+        <div class="text-right"><span class="font-semibold text-ink">${money(x.initial_charge)}</span>${x.service_charge?`<span class="text-xs text-muted"> +${money(x.service_charge)}/svc</span>`:''}<div class="text-xs text-muted">${d} · ${escapeHtml(x.billing_method||'')}</div></div></div>`;
+    }).join('')+'</div>';
+  }catch(e){ $('#recent').textContent='Could not load recent sales.'; }
+}
+$('#refreshRecent').addEventListener('click', loadRecent);
+
+/* ---- Dashboard shell handshake ---- */
+try{ window.parent && window.parent.postMessage({type:'advosy-ready'},'*'); }catch(e){}
+
+loadOptions();
+loadRecent();
+updateTotals();
+</script>
+
+<!-- ============ Dedup lookup + Customer Accounts ============ -->
+<script>
+(function(){
+  const stickyBar = document.querySelector('.fixed.bottom-0');
+  function setMode(m){
+    const sale = m==='sale';
+    $('#saleMode').classList.toggle('hide', !sale);
+    $('#custMode').classList.toggle('hide', sale);
+    if(stickyBar) stickyBar.style.display = sale ? '' : 'none';
+    $('#mSale').className = 'px-4 py-1.5 rounded-md text-sm font-semibold '+(sale?'bg-brand text-white':'text-body');
+    $('#mCust').className = 'px-4 py-1.5 rounded-md text-sm font-semibold '+(!sale?'bg-brand text-white':'text-body');
+  }
+  $('#mSale').onclick=()=>setMode('sale');
+  $('#mCust').onclick=()=>setMode('cust');
+  window.__setMode=setMode;
+
+  const freqLabel = f => ({'30':'Monthly','60':'Bi-monthly','90':'Quarterly','180':'Semi-annual','365':'Annual','-1':'One-time'})[String(f)]||(f?`${f}d`:'—');
+
+  /* ---- Agreement templates (team-shared, DB-backed) ---- */
+  const TPL_REST = SUPA_URL + '/rest/v1/sales_agreement_templates';
+  const TPL_H = { apikey:ANON, Authorization:'Bearer '+ANON, 'Content-Type':'application/json' };
+  window.__templates = [];
+  window.__tplOptions = () => (window.__templates||[]).map(t=>`<option value="${t.id}">${escapeHtml(t.name)}</option>`).join('');
+  async function loadTemplates(){
+    try{ const r=await fetch(`${TPL_REST}?select=*&active=eq.true&order=sort.asc,created_at.asc`,{headers:TPL_H}); window.__templates=await r.json(); }
+    catch(e){ window.__templates=[]; }
+    const sel=$('#agTemplate');
+    if(sel) sel.innerHTML = (window.__templates&&window.__templates.length) ? window.__tplOptions() : '<option value="">Default template</option>';
+  }
+  $('#tplAdd').onclick=()=>{ $('#tplForm').classList.remove('hide'); $('#tpl_err').textContent=''; };
+  $('#tplCancel').onclick=()=>$('#tplForm').classList.add('hide');
+  $('#tplSave').onclick=async()=>{
+    const name=$('#tpl_name').value.trim(); if(!name){ $('#tpl_err').textContent='Name is required.'; return; }
+    const doc=$('#tpl_doc').value.trim();
+    const fr_params = doc ? { documentType: isNaN(Number(doc))?doc:Number(doc) } : {};
+    try{
+      await fetch(TPL_REST,{method:'POST',headers:{...TPL_H,Prefer:'return=minimal'},body:JSON.stringify({ name, fr_params, active:true, created_by:(rep&&rep.full_name)||null })});
+      $('#tplForm').classList.add('hide'); $('#tpl_name').value=''; $('#tpl_doc').value='';
+      await loadTemplates();
+    }catch(e){ $('#tpl_err').textContent='Save failed: '+e.message; }
+  };
+  loadTemplates();
+
+  /* ---- Inline dedup lookup (New Sale) ---- */
+  let dt=null;
+  $('#dedup').addEventListener('input', e=>{
+    const v=e.target.value.trim(); if(dt) clearTimeout(dt);
+    if(v.length<2){ $('#dedupResults').classList.add('hide'); return; }
+    dt=setTimeout(async()=>{
+      try{ const r=await api({action:'customer_search', q:v}); renderDedup(r.results||[]); }catch(_){ $('#dedupResults').classList.add('hide'); }
+    },320);
+  });
+  function renderDedup(list){
+    const box=$('#dedupResults');
+    if(!list.length){ box.innerHTML='<div class="px-3 py-2 text-sm text-muted">No match found — fill in the fields below to create a new customer.</div>'; box.classList.remove('hide'); return; }
+    box.innerHTML=list.map((c,i)=>`<button type="button" data-i="${i}" class="block w-full text-left px-3 py-2 hover:bg-surface border-b border-line last:border-0">
+      <div class="text-sm font-semibold text-ink">${escapeHtml(c.name)} <span class="text-xs text-muted font-normal">#${escapeHtml(c.customerID)}</span></div>
+      <div class="text-xs text-muted">${escapeHtml([c.phone,c.email,c.address].filter(Boolean).join(' · '))}</div></button>`).join('');
+    box.classList.remove('hide');
+    box.querySelectorAll('button').forEach(b=>b.onclick=()=>linkCustomer(list[+b.dataset.i]));
+  }
+  function linkCustomer(c){
+    window.__existingCustomerID=c.customerID; $('#dedupResults').classList.add('hide'); $('#dedup').value='';
+    const parts=(c.name||'').split(/\s+/); $('#firstName').value=parts.shift()||''; $('#lastName').value=parts.join(' ');
+    if(c.phone) $('#phone').value=c.phone; if(c.email) $('#email').value=c.email;
+    $('#linkedText').textContent='Linked to existing account #'+c.customerID+' — '+c.name+'. No duplicate will be created; the sale attaches to this account.';
+    const b=$('#linkedBanner'); b.classList.remove('hide'); b.style.display='flex';
+  }
+  $('#unlink').onclick=()=>{ window.__existingCustomerID=null; const b=$('#linkedBanner'); b.classList.add('hide'); b.style.display='none'; };
+  document.addEventListener('click', e=>{ if(!e.target.closest('#dedup')&&!e.target.closest('#dedupResults')) $('#dedupResults').classList.add('hide'); });
+
+  /* ---- Customer Accounts mode ---- */
+  $('#cSearchBtn').onclick=custSearch;
+  $('#cSearch').addEventListener('keydown', e=>{ if(e.key==='Enter') custSearch(); });
+  async function custSearch(){
+    const v=$('#cSearch').value.trim();
+    if(v.length<2){ $('#cResults').innerHTML='<div class="text-sm text-muted">Type at least 2 characters.</div>'; return; }
+    $('#cResults').innerHTML='<div class="text-sm text-muted">Searching…</div>'; $('#cDetail').innerHTML='';
+    try{
+      const r=await api({action:'customer_search', q:v}); const list=r.results||[];
+      if(!list.length){ $('#cResults').innerHTML='<div class="text-sm text-muted">No customers found.</div>'; return; }
+      $('#cResults').innerHTML='<div class="divide-y divide-line">'+list.map((c,i)=>`<button data-i="${i}" class="cRes block w-full text-left py-2 px-1 hover:bg-surface">
+        <span class="font-semibold text-ink">${escapeHtml(c.name)}</span> <span class="text-xs text-muted">#${escapeHtml(c.customerID)}</span>
+        <div class="text-xs text-muted">${escapeHtml([c.phone,c.email,c.address].filter(Boolean).join(' · '))}</div></button>`).join('')+'</div>';
+      $('#cResults').querySelectorAll('.cRes').forEach(b=>b.onclick=()=>openCustomer(list[+b.dataset.i]));
+    }catch(e){ $('#cResults').innerHTML='<div class="text-sm text-danger">Error: '+e.message+'</div>'; }
+  }
+  async function openCustomer(c){
+    $('#cDetail').innerHTML='<div class="card mb-5 text-sm text-muted">Loading account…</div>';
+    try{ const d=await api({action:'customer_get', customerID:c.customerID}); renderCustomer(d.customer||c, d.subscriptions||[]); }
+    catch(e){ $('#cDetail').innerHTML='<div class="card mb-5 text-sm text-danger">Error: '+e.message+'</div>'; }
+  }
+  function renderCustomer(c, subs){
+    const planOpts='<option value="">Select a plan…</option>'+plans.map((p,i)=>`<option value="${i}">${escapeHtml(p.name)}</option>`).join('');
+    const subRows = subs.length ? subs.map(s=>`<tr>
+        <td class="py-1.5 pr-3">${escapeHtml(s.serviceName||('Service '+s.serviceID))}</td>
+        <td class="pr-3">${freqLabel(s.frequency)}</td>
+        <td class="pr-3">${s.serviceCharge!=null?money(s.serviceCharge):'—'}</td>
+        <td class="pr-3">${escapeHtml(s.nextService||'—')}</td>
+        <td>${s.active?'<span class="text-emerald-600 font-semibold">Active</span>':'<span class="text-muted">Inactive</span>'}</td></tr>`).join('')
+      : '<tr><td colspan="5" class="py-2 text-muted">No subscriptions on file.</td></tr>';
+    $('#cDetail').innerHTML=`
+    <div class="card mb-5">
+      <h2 class="text-lg font-bold text-ink">${escapeHtml(c.name)}</h2>
+      <div class="text-sm text-muted">#${escapeHtml(c.customerID)} · ${escapeHtml([c.phone,c.email].filter(Boolean).join(' · '))}</div>
+      <div class="text-sm text-muted">${escapeHtml(c.address||'')}</div>
+      <h3 class="text-sm font-bold text-ink mt-4 mb-1">Current services</h3>
+      <table class="w-full text-sm"><thead><tr class="text-left text-[11px] uppercase text-muted border-b border-line"><th class="py-1 pr-3">Service</th><th>Interval</th><th>Rate</th><th>Next</th><th>Status</th></tr></thead><tbody>${subRows}</tbody></table>
+
+      <h3 class="text-sm font-bold text-ink mt-5 mb-2">Add a service</h3>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div class="md:col-span-2"><label class="lbl">Plan</label><select id="as_plan" class="inp">${planOpts}</select></div>
+        <div><label class="lbl">Initial ($)</label><input id="as_init" class="inp" inputmode="decimal" /></div>
+        <div><label class="lbl">Recurring ($)</label><input id="as_svc" class="inp" inputmode="decimal" placeholder="0 for one-time" /></div>
+        <div><label class="lbl">Interval</label><select id="as_freq" class="inp"><option value="30">Monthly</option><option value="60">Bi-monthly</option><option value="90" selected>Quarterly</option><option value="180">Semi-annual</option><option value="365">Annual</option><option value="-1">One-time</option></select></div>
+        <div><label class="lbl">Agreement (months)</label><input id="as_agr" class="inp" inputmode="numeric" /></div>
+        <div class="md:col-span-2"><label class="lbl">Agreement template</label><select id="as_tpl" class="inp"></select></div>
+      </div>
+      <div class="flex flex-wrap gap-4 mt-3">
+        <label class="flex items-center gap-2 text-sm cursor-pointer"><input type="checkbox" id="as_send" checked class="w-4 h-4 accent-brand" /> Email agreement</label>
+        <label class="flex items-center gap-2 text-sm cursor-pointer"><input type="checkbox" id="as_appt" class="w-4 h-4 accent-brand" /> Schedule service</label>
+      </div>
+      <div id="as_apptBox" class="hide mt-3">
+        <button type="button" id="as_load" class="btn btn-p" style="padding:8px 14px">Find open times</button>
+        <span id="as_slotStatus" class="text-xs text-muted ml-2"></span>
+        <div id="as_slots" class="grid grid-cols-2 md:grid-cols-3 gap-2 mt-2"></div>
+      </div>
+      <div id="as_msg" class="text-xs text-danger mt-2 h-4"></div>
+      <button id="as_save" class="btn btn-p mt-1">Add service to account</button>
+      <div id="as_result" class="mt-3"></div>
+    </div>`;
+
+    const asTpl=document.getElementById('as_tpl');
+    if(asTpl) asTpl.innerHTML = (window.__templates&&window.__templates.length) ? window.__tplOptions() : '<option value="">Default template</option>';
+    let asSpot=null;
+    const asPlan=document.getElementById('as_plan');
+    asPlan.onchange=()=>{ const p=plans[asPlan.value]; if(!p)return;
+      if(p.initialCharge!=null) document.getElementById('as_init').value=p.initialCharge;
+      if(p.serviceCharge!=null) document.getElementById('as_svc').value=p.serviceCharge;
+      if(p.frequencyDays!=null){ const f=String(p.frequencyDays), sel=document.getElementById('as_freq'); if([...sel.options].some(o=>o.value===f)) sel.value=f; } };
+    document.getElementById('as_appt').onchange=e=>document.getElementById('as_apptBox').classList.toggle('hide', !e.target.checked);
+    document.getElementById('as_load').onclick=async()=>{
+      const st=document.getElementById('as_slotStatus'); st.textContent='Searching…'; document.getElementById('as_slots').innerHTML=''; asSpot=null;
+      try{ const now=Date.now(); const o=await api({action:'availability', start_date:now, end_date:now+14*86400000});
+        if(!o.slots||!o.slots.length){ st.textContent='No open spots.'; return; }
+        st.textContent=o.slots.length+' open'; const box=document.getElementById('as_slots');
+        o.slots.slice(0,45).forEach(s=>{ const d=new Date(s.start); const el=document.createElement('div'); el.className='spot';
+          el.innerHTML=`<div class="font-semibold text-ink">${d.toLocaleDateString(undefined,{weekday:'short',month:'short',day:'numeric'})} · ${d.toLocaleTimeString(undefined,{hour:'numeric',minute:'2-digit'})}</div><div class="text-xs text-muted">${escapeHtml(s.assignedRep||'Route')}</div>`;
+          el.onclick=()=>{ box.querySelectorAll('.spot').forEach(x=>x.classList.remove('sel')); el.classList.add('sel'); asSpot=s; };
+          box.appendChild(el); });
+      }catch(e){ st.textContent='Error: '+e.message; }
+    };
+    document.getElementById('as_save').onclick=async()=>{
+      const msg=document.getElementById('as_msg'); msg.textContent='';
+      const p=plans[asPlan.value]; if(!p){ msg.textContent='Choose a plan.'; return; }
+      const payload={ action:'add_service', officeID:OFFICE, customerID:c.customerID, rep:{id:rep.id||null,name:rep.full_name||null}, customer:{},
+        subscription:{ serviceID:p.serviceID, frequencyDays:Number(document.getElementById('as_freq').value),
+          initialCharge:Number(document.getElementById('as_init').value||0), serviceCharge:Number(document.getElementById('as_svc').value||0),
+          agreementLengthMonths:document.getElementById('as_agr').value?Number(document.getElementById('as_agr').value):undefined },
+        agreement:(function(){ const s=document.getElementById('as_tpl'); const t=(window.__templates||[]).find(x=>x.id===(s&&s.value)); return { send:document.getElementById('as_send').checked, templateId:t?t.id:undefined, templateName:t?t.name:undefined, contractParams:t?t.fr_params:undefined }; })() };
+      if(document.getElementById('as_appt').checked){ if(!asSpot){ msg.textContent='Pick a time or uncheck scheduling.'; return; }
+        payload.appointment={ schedule:true, spotID:asSpot.spotID, start:asSpot.start, end:asSpot.end, windowMin:asSpot.windowMin, employeeID:asSpot.assignedTech, assignedRep:asSpot.assignedRep }; }
+      const btn=document.getElementById('as_save'); btn.disabled=true; btn.textContent='Adding…';
+      try{ const res=await api(payload);
+        const warn=(res.warnings||[]).concat([res.billingError&&('Billing: '+res.billingError),res.appointmentError&&('Appointment: '+res.appointmentError)].filter(Boolean));
+        document.getElementById('as_result').innerHTML=`<div class="bg-emerald-50 border border-emerald-200 rounded-lg p-3 text-sm text-emerald-800">Service added ✓ — Subscription #${escapeHtml(res.subscriptionID)}${res.contractSent?' · agreement emailed':''}${res.appointmentID?' · appointment booked':''}${warn.length?'<div class="mt-1" style="color:#b45309">'+warn.map(escapeHtml).join('<br>')+'</div>':''}</div>`;
+      }catch(e){ msg.textContent='Failed: '+e.message; }
+      finally{ btn.disabled=false; btn.textContent='Add service to account'; }
+    };
+  }
+})();
+</script>
+
+<!-- ============ GHL Leads rail + autofill + clear ============ -->
+<script>
+(function(){
+  let leads=[], filter='All', selId=null;
+
+  /* ---- Clear all fields ---- */
+  function clearForm(){
+    ['firstName','lastName','phone','email','addr','city','state','zip','notes',
+     'initialCharge','serviceCharge','agreement','poNumber',
+     'c_name','c_number','c_month','c_year','c_cvv','c_zip',
+     'a_name','a_bank','a_routing','a_account','dedup'].forEach(id=>{ const el=$('#'+id); if(el) el.value=''; });
+    const plan=$('#plan'); if(plan) plan.value='';
+    const src=$('#sourceID'); if(src) src.value='';
+    const freq=$('#frequency'); if(freq) freq.value='90';
+    const sb=$('#soldBy'); if(sb) sb.value='';
+    $('#addons').innerHTML='';
+    // reset billing to pay-link
+    document.querySelectorAll('[data-bill]').forEach(x=>x.classList.remove('sel'));
+    const pl=document.querySelector('[data-bill="paylink"]'); if(pl) pl.click();
+    // agreement + appointment defaults
+    if($('#sendAgreement')) $('#sendAgreement').checked=true;
+    if($('#wantAppt')){ $('#wantAppt').checked=false; $('#apptBox').classList.add('hide'); }
+    $('#slots').innerHTML=''; $('#slotStatus').textContent='';
+    // clear linked customer + result
+    window.__existingCustomerID=null;
+    const b=$('#linkedBanner'); if(b){ b.classList.add('hide'); b.style.display='none'; }
+    $('#dedupResults').classList.add('hide');
+    $('#result').classList.add('hide'); $('#result').innerHTML='';
+    $('#submitMsg').textContent='';
+    if(typeof updateTotals==='function') updateTotals();
+    selId=null; renderLeads();
+  }
+  $('#clearForm').onclick=clearForm;
+  window.__clearForm=clearForm;
+
+  /* ---- Leads rail ---- */
+  const chOf = l => /thumbtack/i.test(l.channel)?'Thumbtack':/facebook/i.test(l.channel)?'Facebook':/website|form/i.test(l.channel)?'web':'Other';
+  const chLabel = l => { const c=chOf(l); return c==='web'?'Website':c; };
+  function timeAgo(iso){ if(!iso) return ''; const s=(Date.now()-Date.parse(iso))/1000; if(s<3600)return Math.max(1,Math.round(s/60))+'m'; if(s<86400)return Math.round(s/3600)+'h'; return Math.round(s/86400)+'d'; }
+
+  async function loadLeads(){
+    $('#leadList').innerHTML='<div class="text-sm text-muted p-2">Loading leads…</div>';
+    try{ const r=await api({action:'leads'}); leads=r.leads||[]; buildFilter(); renderLeads(); }
+    catch(e){ $('#leadList').innerHTML='<div class="text-sm text-danger p-2">Could not load leads: '+escapeHtml(e.message)+'</div>'; }
+  }
+  function buildFilter(){
+    const counts={All:leads.length,Facebook:0,Thumbtack:0,Website:0,Other:0};
+    leads.forEach(l=>{ const c=chLabel(l); counts[c]=(counts[c]||0)+1; });
+    const cats=['All','Facebook','Thumbtack','Website','Other'].filter(c=>c==='All'||counts[c]);
+    $('#leadFilter').innerHTML=cats.map(c=>`<span class="lfch${c===filter?' sel':''}" data-c="${c}">${c} ${counts[c]||0}</span>`).join('');
+    $('#leadFilter').querySelectorAll('.lfch').forEach(el=>el.onclick=()=>{ filter=el.dataset.c; buildFilter(); renderLeads(); });
+  }
+  function renderLeads(){
+    const list=leads.filter(l=> filter==='All' || chLabel(l)===filter);
+    if(!list.length){ $('#leadList').innerHTML='<div class="text-sm text-muted p-2">No leads in this view.</div>'; return; }
+    $('#leadList').innerHTML=list.map(l=>{
+      const c=chOf(l);
+      const sub=[l.phone, l.city].filter(Boolean).join(' · ');
+      return `<div class="lead${l.contactId===selId?' sel':''}" data-id="${l.contactId}">
+        <div class="flex items-center justify-between gap-2">
+          <div class="nm">${escapeHtml(l.name)}</div>
+          <span class="lch ${c}">${chLabel(l)}</span>
+        </div>
+        <div class="text-xs text-muted mt-0.5">${escapeHtml(sub)}</div>
+        <div class="text-[10px] text-muted mt-0.5">${l.dateAdded?('added '+timeAgo(l.dateAdded)+' ago'):''}</div>
+      </div>`;
+    }).join('');
+    $('#leadList').querySelectorAll('.lead').forEach(el=>el.onclick=()=>pickLead(el.dataset.id));
+  }
+
+  async function pickLead(contactId){
+    selId=contactId; renderLeads();
+    if(window.__setMode) window.__setMode('sale');
+    document.body.classList.remove('rail-open');
+    const lead = leads.find(l=>l.contactId===contactId) || {};
+    // clear then fill
+    if(window.__clearForm) window.__clearForm();
+    selId=contactId;
+    $('#leadList').querySelectorAll('.lead').forEach(el=>el.classList.toggle('sel', el.dataset.id===contactId));
+    // fill quickly from list data
+    fill(lead);
+    try{
+      const d=await api({action:'lead_get', contactId});
+      fill(d);
+      const clean=s=>String(s).replace(/(\[object Object\][,;\s]*)+/g,'').replace(/\s{2,}/g,' ').trim();
+      const answerText=(d.answers||[]).map(a=>({l:a.label,v:clean(a.value)})).filter(a=>a.v).map(a=>`${a.l}: ${a.v}`).join('\n');
+      const noteText=(d.notes||[]).map(clean).filter(Boolean).join('\n');
+      const parts=[];
+      if(d.channel) parts.push('Lead source: '+d.channel+(d.source&&d.source!==d.channel?(' ('+d.source+')'):''));
+      if(answerText) parts.push('Form answers:\n'+answerText);
+      if(noteText) parts.push('GHL notes:\n'+noteText);
+      if(parts.length) $('#notes').value=parts.join('\n\n');
+      // try match FieldRoutes lead source to the channel
+      matchSource(d.channel);
+    }catch(e){ /* list data already filled */ }
+  }
+  function fill(d){
+    if(d.firstName!==undefined && d.firstName) $('#firstName').value=d.firstName;
+    else if(d.name){ const p=d.name.split(/\s+/); $('#firstName').value=p.shift()||''; $('#lastName').value=p.join(' '); }
+    if(d.lastName) $('#lastName').value=d.lastName;
+    if(d.phone) $('#phone').value=d.phone;
+    if(d.email) $('#email').value=d.email;
+    if(d.street) $('#addr').value=d.street;
+    if(d.city) $('#city').value=d.city;
+    if(d.state) $('#state').value=(String(d.state).length>2?({Arizona:'AZ',Nevada:'NV'}[d.state]||d.state):d.state);
+    if(d.zip) $('#zip').value=d.zip;
+  }
+  function matchSource(channel){
+    if(!channel) return; const sel=$('#sourceID'); if(!sel) return;
+    const want=channel.toLowerCase();
+    for(const o of sel.options){ const t=(o.textContent||'').toLowerCase(); if(t && (t.includes(want)|| (want.includes('facebook')&&(t.includes('facebook')||t.includes('meta')))|| (want.includes('thumbtack')&&t.includes('thumbtack')))){ sel.value=o.value; break; } }
+  }
+
+  $('#leadRefresh').onclick=loadLeads;
+  $('#leadOpen').onclick=()=>document.body.classList.toggle('rail-open');
+  loadLeads();
+})();
+</script>
+
+<!-- ============ Pestkee Pricebook (reference) ============ -->
+<script>
+(function(){
+  const SQFT = ['0–2k','2.1–3k','3.1–4k','4.1–5k','5k+'];
+  const LOT  = ['4k–8k','8.1–12k','12–20k','21–40k','1 acre+'];
+  const m = n => (n==null||n==='')?'—':(typeof n==='number'?('$'+n.toLocaleString()):n);
+
+  function tierTable(head, rows){
+    let h = '<table class="pb-tbl"><thead><tr><th></th>'+head.map(x=>`<th>${x}</th>`).join('')+'</tr></thead><tbody>';
+    for(const r of rows){
+      if(r.grp){ h+=`<tr class="grp"><td colspan="${head.length+1}">${r.grp}</td></tr>`; continue; }
+      h+='<tr><td>'+r.label+'</td>'+r.vals.map(v=>`<td>${m(v)}</td>`).join('')+'</tr>';
+    }
+    return h+'</tbody></table>';
+  }
+
+  const CATS = {
+    'Residential': ()=>{
+      return '<div class="pb-h">Residential General Pest</div>'+
+      tierTable(SQFT,[
+        {grp:'Monthly'},
+        {label:'Initial', vals:[200,250,300,350,400]},
+        {label:'Min initial', vals:[75,100,100,150,150]},
+        {label:'Monthly', vals:[60,65,70,75,80]},
+        {label:'Contract value', vals:[920,1030,1140,1250,1360]},
+        {grp:'Bi-Monthly'},
+        {label:'Initial', vals:[200,250,300,350,400]},
+        {label:'Min initial', vals:[75,100,100,150,150]},
+        {label:'Monthly', vals:[50,55,60,65,70]},
+        {label:'Contract value', vals:[800,910,1020,1130,1240]},
+        {grp:'Quarterly'},
+        {label:'Initial', vals:[200,250,300,350,400]},
+        {label:'Min initial', vals:[75,100,100,150,150]},
+        {label:'Monthly', vals:[40,45,50,55,60]},
+        {label:'Contract value', vals:[680,790,900,1010,1120]},
+        {grp:'Green / Natural (Monthly)'},
+        {label:'Initial', vals:[200,250,300,350,400]},
+        {label:'Monthly', vals:[65,70,75,80,85]},
+        {label:'Contract value', vals:[980,1090,1200,1310,1420]},
+      ])+
+      '<div class="pb-note">Employee / friends &amp; family: drop one pricing tier. Techs get one free spray per quarter.</div>';
+    },
+    'Commercial': ()=>{
+      return '<div class="pb-h">Commercial General Pest</div>'+
+      tierTable(SQFT,[
+        {grp:'Monthly'},
+        {label:'Initial', vals:[300,350,400,450,500]},
+        {label:'Monthly', vals:[65,70,75,80,85]},
+        {label:'Contract value', vals:[1080,1190,1300,1410,1520]},
+        {grp:'Bi-Monthly'},
+        {label:'Initial', vals:[300,350,400,450,500]},
+        {label:'Monthly', vals:[60,65,70,75,80]},
+        {label:'Contract value', vals:[1020,1130,1240,1350,1460]},
+        {grp:'Quarterly'},
+        {label:'Initial', vals:[300,350,400,450,500]},
+        {label:'Monthly', vals:[50,55,60,65,70]},
+        {label:'Contract value', vals:[900,1010,1120,1230,1340]},
+      ])+
+      '<div class="pb-note">Over 5,000 sq ft requires an inspection for a quote. Green / Natural commercial: quote via Ops Manager.</div>';
+    },
+    'One-Time': ()=>{
+      let h = '<div class="pb-h">One-Time — by square footage</div>'+
+      tierTable(SQFT,[
+        {label:'Flea &amp; Tick', vals:[220,260,300,350,400]},
+        {label:'Nocturnal Scorpion', vals:[280,280,280,280,280]},
+        {label:'Fly Treatment', vals:[250,250,250,250,250]},
+      ]);
+      h += '<div class="pb-h">One-Time — by rooms / areas</div>'+
+      tierTable(['Base (1–3)','Each add\'l'],[
+        {label:'German Roach', vals:[300,50]},
+        {label:'Bed Bug', vals:[500,100]},
+        {label:'Rodent Exclusion', vals:[300,75]},
+        {label:'Bee Treatment', vals:[250,'—']},
+        {label:'Ant Treatment', vals:[250,30]},
+      ])+
+      '<div class="pb-note">German Roach: may need a 2nd service ~2 weeks later if severe. Rodent Exclusion &amp; Bee: attic/roof add $100.</div>';
+      h += '<div class="pb-h">One-Time — by lot size</div>'+
+      tierTable(LOT,[
+        {label:'Burrowing Rodent', vals:[250,350,500,650,'Custom']},
+        {label:'Mosquito', vals:[175,250,350,500,'Custom']},
+      ]);
+      h += '<div class="pb-h">Pigeon Control</div><div class="pb-note">$9 per linear foot — includes sanitation and installation of the appropriate control device(s).</div>';
+      return h;
+    },
+    'Weeds': ()=>{
+      return '<div class="pb-h">Weeds — Pre &amp; Post Emergent</div>'+
+      tierTable(LOT,[{label:'Treatment', vals:[140,250,400,550,'Custom']}])+
+      '<div class="pb-note">Treatment every 6 months. 1 acre+ is custom (Field Ops Manager).</div>';
+    },
+    'Termites': ()=>'<div class="pb-h">Termites</div><div class="pb-note">Forward to the Ops Manager for a quote.</div>',
+  };
+
+  const chips = document.getElementById('pbChips');
+  const bodyEl = document.getElementById('pbBody');
+  const cats = Object.keys(CATS);
+  let cur = cats[0];
+  function renderChips(){
+    chips.innerHTML = cats.map(c=>`<span class="pb-chip${c===cur?' sel':''}" data-c="${c}">${c}</span>`).join('');
+    chips.querySelectorAll('.pb-chip').forEach(el=>el.onclick=()=>{ cur=el.dataset.c; renderChips(); bodyEl.innerHTML=CATS[cur](); });
+  }
+  function open(v){
+    const p=document.getElementById('pbPanel'); p.classList.toggle('hide', !v);
+    document.getElementById('pbCaret').textContent = v?'▾':'▸';
+    if(v && !bodyEl.innerHTML){ renderChips(); bodyEl.innerHTML=CATS[cur](); }
+  }
+  document.getElementById('pbToggle').onclick=()=>open(document.getElementById('pbPanel').classList.contains('hide'));
+  document.getElementById('pbClose').onclick=()=>open(false);
+})();
+</script>
+
+<!-- ============ Current Offers (team-shared, DB-backed) ============ -->
+<script>
+(function(){
+  const REST = SUPA_URL + '/rest/v1/sales_offers';
+  const H = { apikey:ANON, Authorization:'Bearer '+ANON, 'Content-Type':'application/json' };
+  const esc = (typeof escapeHtml==='function') ? escapeHtml : (s=>String(s==null?'':s));
+  const AUD = { new:['New customers','b-new'], past:['Past clients','b-past'], both:['Everyone','b-both'] };
+  const panel=document.getElementById('ofPanel'), form=document.getElementById('ofForm'), listEl=document.getElementById('ofList');
+
+  function openPanel(v){
+    panel.classList.toggle('hide', !v);
+    document.getElementById('ofCaret').textContent = v?'▾':'▸';
+    if(v) load();
+  }
+  document.getElementById('ofToggle').onclick=()=>openPanel(panel.classList.contains('hide'));
+  document.getElementById('ofClose').onclick=()=>openPanel(false);
+
+  function showForm(v){ form.classList.toggle('hide', !v); if(v) document.getElementById('of_err').textContent=''; }
+  function clearForm(){ ['of_id','of_name','of_headline','of_details','of_discount','of_promo','of_from','of_to'].forEach(id=>document.getElementById(id).value=''); document.getElementById('of_audience').value='new'; document.getElementById('of_active').checked=true; }
+  document.getElementById('ofAdd').onclick=()=>{ clearForm(); showForm(true); };
+  document.getElementById('ofCancel').onclick=()=>showForm(false);
+
+  document.getElementById('ofSave').onclick=async ()=>{
+    const name=document.getElementById('of_name').value.trim();
+    if(!name){ document.getElementById('of_err').textContent='Offer name is required.'; return; }
+    const id=document.getElementById('of_id').value;
+    const row={
+      name, audience:document.getElementById('of_audience').value,
+      headline:document.getElementById('of_headline').value.trim()||null,
+      details:document.getElementById('of_details').value.trim()||null,
+      discount:document.getElementById('of_discount').value.trim()||null,
+      promo_code:document.getElementById('of_promo').value.trim()||null,
+      valid_from:document.getElementById('of_from').value||null,
+      valid_to:document.getElementById('of_to').value||null,
+      active:document.getElementById('of_active').checked,
+      created_by: (rep&&rep.full_name)||null,
+    };
+    try{
+      if(id){
+        row.updated_at=new Date().toISOString();
+        await fetch(`${REST}?id=eq.${id}`,{method:'PATCH',headers:H,body:JSON.stringify(row)});
+      } else {
+        await fetch(REST,{method:'POST',headers:{...H,Prefer:'return=minimal'},body:JSON.stringify(row)});
+      }
+      showForm(false); clearForm(); load();
+    }catch(e){ document.getElementById('of_err').textContent='Save failed: '+e.message; }
+  };
+
+  function editOffer(o){
+    document.getElementById('of_id').value=o.id;
+    document.getElementById('of_name').value=o.name||'';
+    document.getElementById('of_audience').value=o.audience||'new';
+    document.getElementById('of_headline').value=o.headline||'';
+    document.getElementById('of_details').value=o.details||'';
+    document.getElementById('of_discount').value=o.discount||'';
+    document.getElementById('of_promo').value=o.promo_code||'';
+    document.getElementById('of_from').value=o.valid_from||'';
+    document.getElementById('of_to').value=o.valid_to||'';
+    document.getElementById('of_active').checked=!!o.active;
+    showForm(true); panel.scrollTop=0;
+  }
+  async function toggleActive(o){ try{ await fetch(`${REST}?id=eq.${o.id}`,{method:'PATCH',headers:H,body:JSON.stringify({active:!o.active,updated_at:new Date().toISOString()})}); load(); }catch(e){} }
+  window.__ofEdit=editOffer; window.__ofToggle=toggleActive;
+
+  function card(o){
+    const [alabel,acls]=AUD[o.audience]||AUD.new;
+    const validity=[o.valid_from,o.valid_to].some(Boolean)?`<div class="text-xs text-muted mt-1">Valid ${o.valid_from||'—'} → ${o.valid_to||'—'}</div>`:'';
+    return `<div class="of-card" style="${o.active?'':'opacity:.6'}">
+      <div class="flex items-start justify-between">
+        <div class="nm">${esc(o.name)}<span class="of-badge ${acls}">${alabel}</span>${o.active?'':'<span class="of-badge b-off">Inactive</span>'}</div>
+      </div>
+      ${o.headline?`<div class="text-sm text-ink font-medium mt-1">${esc(o.headline)}</div>`:''}
+      ${o.details?`<div class="text-sm text-body mt-1">${esc(o.details)}</div>`:''}
+      ${o.discount?`<div class="text-sm mt-1"><span class="text-muted">Offer: </span><span class="font-semibold text-ink">${esc(o.discount)}</span></div>`:''}
+      ${o.promo_code?`<div><span class="of-promo">${esc(o.promo_code)}</span></div>`:''}
+      ${validity}
+      <div class="flex gap-3 mt-2 text-xs">
+        <button onclick='__ofEdit(${JSON.stringify(o).replace(/'/g,"&#39;")})' class="text-brand font-semibold">Edit</button>
+        <button onclick='__ofToggle(${JSON.stringify({id:o.id,active:o.active})})' class="text-muted font-semibold">${o.active?'Deactivate':'Activate'}</button>
+      </div>
+    </div>`;
+  }
+
+  async function load(){
+    try{
+      const r=await fetch(`${REST}?select=*&order=active.desc,sort.asc,created_at.asc`,{headers:H});
+      const rows=await r.json();
+      if(!Array.isArray(rows)||!rows.length){ listEl.innerHTML='<div class="text-muted">No offers yet. Click “+ Add offer”.</div>'; return; }
+      const groups=[['new','For new customers'],['past','For past clients'],['both','For everyone']];
+      let html='';
+      for(const [key,title] of groups){
+        const items=rows.filter(o=>o.audience===key);
+        if(!items.length) continue;
+        html+=`<div class="of-grp">${title}</div>`+items.map(card).join('');
+      }
+      listEl.innerHTML=html||rows.map(card).join('');
+    }catch(e){ listEl.innerHTML='<div class="text-danger">Could not load offers.</div>'; }
+  }
+})();
+</script>
+</body>
+</html>

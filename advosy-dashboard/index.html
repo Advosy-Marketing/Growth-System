@@ -53,6 +53,7 @@ tailwind.config = { theme: { extend: {
   <!-- ===== Frames (each pane scrolls internally) ===== -->
   <div id="frames" class="hidden flex-1 relative">
     <iframe id="f-booking" title="Booking" allow="clipboard-write"></iframe>
+    <iframe id="f-sales" title="Sales" class="hidden" allow="clipboard-write"></iframe>
     <iframe id="f-dash" title="Dashboard" class="hidden"></iframe>
   </div>
 
@@ -67,20 +68,21 @@ let rep=null;
 /* ---------- tabs ---------- */
 function tabDefs(){
   const isAdmin = rep && (rep.role==='admin'||rep.role==='manager');
-  const V='20260713a'; // bump on each deploy to force iframes to fetch the new build
+  const V='20260723a'; // bump on each deploy to force iframes to fetch the new build
   return [
     {id:'book',      label:'Book Now',          frame:'booking', src:`book.html?embed=1&v=${V}#book`,            view:'book'},
     {id:'history',   label:'Booking History',   frame:'booking', src:`book.html?embed=1&v=${V}#book`,            view:'history'},
+    {id:'sales',     label:'Sales',             frame:'sales',   src:`sales.html?embed=1&v=${V}`,                view:'sales'},
     {id:'pay',       label:isAdmin?'Payroll & Commissions':'My Pay', frame:'dash', src:`admin-report.html?embed=1&v=${V}#payroll`, view:'payroll'},
     {id:'marketing', label:'Marketing',         frame:'dash',    src:`admin-report.html?embed=1&v=${V}#payroll`, view:'marketing'},
   ];
 }
-const FRAME_EL={ booking:()=>$('#f-booking'), dash:()=>$('#f-dash') };
-const ready={booking:false, dash:false};
-const pending={booking:null, dash:null};
+const FRAME_EL={ booking:()=>$('#f-booking'), sales:()=>$('#f-sales'), dash:()=>$('#f-dash') };
+const ready={booking:false, sales:false, dash:false};
+const pending={booking:null, sales:null, dash:null};
 
 // Robust cross-frame view switching via postMessage (works regardless of origin / file://).
-function frameKeyOf(win){ try{ if(win===FRAME_EL.booking().contentWindow) return 'booking'; if(win===FRAME_EL.dash().contentWindow) return 'dash'; }catch(e){} return null; }
+function frameKeyOf(win){ try{ if(win===FRAME_EL.booking().contentWindow) return 'booking'; if(win===FRAME_EL.sales().contentWindow) return 'sales'; if(win===FRAME_EL.dash().contentWindow) return 'dash'; }catch(e){} return null; }
 window.addEventListener('message', e=>{
   const d=e.data; if(!d) return;
   if(d.type==='advosy-ready'){
